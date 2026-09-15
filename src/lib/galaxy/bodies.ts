@@ -40,7 +40,7 @@ export const BODIES: CelestialBody[] = [
     size: 1.35,
     color: [1.0, 0.62, 0.28],
     blurb:
-      "<i>As pessoas são imitações de macacos<i>"<b>"<i>Os deuses são imitaçoes de pessoas<i>.",
+      "<i>As pessoas são imitações de macacos<i>.<i>Os deuses são imitaçoes de pessoas<i>.",
     href: "https://www.instagram.com/m.gabriel.l.m?stkn=MTM4M2xqbXh5aG9iYw==",
   },
   {
