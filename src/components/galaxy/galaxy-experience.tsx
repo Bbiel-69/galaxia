@@ -52,16 +52,20 @@ export function GalaxyExperience() {
       onFrame: (
         next: { id: string; x: number; y: number; visible: boolean }[],
       ) => {
-        const sel = selectedIdRef.current;
         for (const label of next) {
           const el = labelRefs.current.get(label.id);
           if (!el) continue;
           const body = bodyById(label.id);
           const isBh = body?.kind === "black-hole";
+          if (isBh) {
+            el.style.opacity = "0";
+            el.style.pointerEvents = "none";
+            continue;
+          }
           const ox = label.x;
-          const oy = isBh ? label.y : label.y - 14;
-          el.style.transform = `translate3d(${ox}px, ${oy}px, 0) translate(-50%, ${isBh ? "0" : "-100%"})`;
-          const show = label.visible && !(isBh && sel === "inicio");
+          const oy = label.y - 14;
+          el.style.transform = `translate3d(${ox}px, ${oy}px, 0) translate(-50%, -100%)`;
+          const show = label.visible;
           el.style.opacity = show ? "1" : "0";
           el.style.pointerEvents = show ? "auto" : "none";
         }
@@ -120,7 +124,6 @@ export function GalaxyExperience() {
     setSelected(body);
     setHint(false);
     audioRef.current?.ping();
-    if (body?.href) window.open(body.href, "_blank", "noopener,noreferrer");
   }, []);
 
   return (
@@ -141,7 +144,8 @@ export function GalaxyExperience() {
       />
 
       {BODIES.map((body) => {
-        const isBh = body.kind === "black-hole";
+        if (body.kind === "black-hole") return null;
+
         return (
           <button
             key={body.id}
@@ -151,21 +155,14 @@ export function GalaxyExperience() {
               else labelRefs.current.delete(body.id);
             }}
             onClick={() => onLabelClick(body.id)}
-            title={body.href ? `${body.name} — abre em nova aba` : body.name}
+            title={body.name}
             className="absolute top-0 left-0 z-10 min-h-11 px-2 text-center will-change-transform"
             style={{ opacity: 0, pointerEvents: "none" }}
           >
-            {isBh ? (
-              <span className="inline-flex items-center gap-1.5 font-display text-lg tracking-[0.34em] text-fg/90 uppercase">
-                Início
-                {body.href ? <ExternalLink className="size-3.5 shrink-0 opacity-70" aria-hidden /> : null}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 font-sans text-[11px] font-medium tracking-[0.18em] text-accent uppercase">
-                {body.name}
-                {body.href ? <ExternalLink className="size-3 shrink-0 opacity-70" aria-hidden /> : null}
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1 font-sans text-[11px] font-medium tracking-[0.18em] text-accent uppercase">
+              {body.name}
+              {body.href ? <ExternalLink className="size-3 shrink-0 opacity-70" aria-hidden /> : null}
+            </span>
           </button>
         );
       })}

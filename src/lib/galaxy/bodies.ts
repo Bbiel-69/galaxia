@@ -40,7 +40,7 @@ export const BODIES: CelestialBody[] = [
     size: 1.35,
     color: [1.0, 0.62, 0.28],
     blurb:
-      "<i>As pessoas são imitações de macacos<i>.<i>Os deuses são imitaçoes de pessoas<i>.",
+      "As pessoas são imitações de macacos. Os deuses são imitações de pessoas.",
     href: "https://www.instagram.com/m.gabriel.l.m?stkn=MTM4M2xqbXh5aG9iYw==",
   },
   {
@@ -52,8 +52,7 @@ export const BODIES: CelestialBody[] = [
     y: a0.y,
     size: 0.9,
     color: [0.55, 0.78, 1.0],
-    blurb:
-      "",
+    blurb: "",
   },
   {
     id: "vega",
@@ -66,7 +65,6 @@ export const BODIES: CelestialBody[] = [
     color: [0.85, 0.93, 1.0],
     blurb:
       "Já foi o norte do céu, e voltará a ser. Cerca de 25 anos-luz daqui, Vega gira tão rápido que seu equador incha — uma joia achatada no verão boreal.",
-    href: "https://pt.wikipedia.org/wiki/Vega_(estrela)",
   },
   {
     id: "andromeda",
@@ -103,7 +101,6 @@ export const BODIES: CelestialBody[] = [
     color: [0.7, 0.86, 1.0],
     blurb:
       "Sete irmãs a olho nu, centenas de sóis azuis por trás. A névoa que as envolve não é delas — é poeira interestelar que o acaso atravessou.",
-    href: "https://pt.wikipedia.org/wiki/Plêiades_(astronomia)",
   },
   {
     id: "betelgeuse",
@@ -116,7 +113,6 @@ export const BODIES: CelestialBody[] = [
     color: [1.0, 0.45, 0.22],
     blurb:
       "Se ocupasse o lugar do Sol, engoliria a Terra. Vive seus últimos milhões de anos. Quando ruir, o céu noturno ganhará uma segunda lua por semanas.",
-    href: "https://pt.wikipedia.org/wiki/Betelgeuse",
   },
   {
     id: "helix",
@@ -141,7 +137,6 @@ export const BODIES: CelestialBody[] = [
     color: [1.0, 0.38, 0.28],
     blurb:
       "Rival de Marte no céu de inverno austral. Uma binária: a gigante vermelha e uma companheira quente, dançando numa envoltória de poeira.",
-    href: "https://pt.wikipedia.org/wiki/Antares",
   },
 ];
 

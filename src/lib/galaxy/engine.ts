@@ -132,7 +132,7 @@ export function createGalaxyEngine(
   const pBuffer = gl.createBuffer();
   const pVao = gl.createVertexArray();
   gl.bindVertexArray(pVao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, pBuffer);
+  gl.bindBuffer(gl.ARRAY_BUFFER, pData);
   gl.bufferData(gl.ARRAY_BUFFER, pData, gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(partProg, "aData");
   gl.enableVertexAttribArray(loc);
@@ -402,7 +402,6 @@ export function createGalaxyEngine(
         selId = hit.id;
         hooks.onSelect(hit.id);
         focusBody(hit, false);
-        if (hit.href) window.open(hit.href, "_blank", "noopener,noreferrer");
       } else {
         selId = null;
         hooks.onSelect(null);
@@ -546,9 +545,7 @@ export function createGalaxyEngine(
       selId = id;
       focusBody(b, false);
     },
-    setMuted() {
-      /* audio wired from UI */
-    },
+    setMuted() {},
     select(id: string | null) {
       selId = id;
     },
