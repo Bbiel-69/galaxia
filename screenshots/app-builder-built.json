@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Horizonte",
+      "hasCanvas": true,
+      "bodyTextLen": 160,
+      "bodyTextHash": "7bd1b76319c243ead54f534421e7d7722e73bd9611f5bc595b0ab0daf8f02bdb",
+      "bodyTextPrefix": "INÍCIO ÓRION VEGA ANDRÔMEDA CARANGUEJO PLÊIADES BETELGEUSE HÉLIX",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Horizonte",
+      "hasCanvas": true,
+      "bodyTextLen": 164,
+      "bodyTextHash": "6a8dc1a863f49a9281d27d282cc502e31da85c21d0cb7dd9c356494ea6131af8",
+      "bodyTextPrefix": "INÍCIO ÓRION VEGA ANDRÔMEDA CARANGUEJO PLÊIADES BETELGEUSE HÉLIX",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}
