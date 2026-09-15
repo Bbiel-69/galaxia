@@ -132,7 +132,7 @@ export function createGalaxyEngine(
   const pBuffer = gl.createBuffer();
   const pVao = gl.createVertexArray();
   gl.bindVertexArray(pVao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, pData);
+  gl.bindBuffer(gl.ARRAY_BUFFER, pBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, pData, gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(partProg, "aData");
   gl.enableVertexAttribArray(loc);
