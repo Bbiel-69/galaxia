@@ -43,7 +43,7 @@ export function GalaxyExperience() {
       onSelect: (id: string | null) => {
         selectedIdRef.current = id;
         const body = id ? (bodyById(id) ?? null) : null;
-        setSelected(body);
+        setSelected(body?.kind === "black-hole" ? body : null);
         if (body) {
           setHint(false);
           audio.ping();
@@ -121,7 +121,7 @@ export function GalaxyExperience() {
     engineRef.current?.select(id);
     selectedIdRef.current = id;
     const body = bodyById(id) ?? null;
-    setSelected(body);
+    setSelected(body?.kind === "black-hole" ? body : null);
     setHint(false);
     audioRef.current?.ping();
   }, []);
@@ -192,7 +192,7 @@ export function GalaxyExperience() {
         </p>
       ) : null}
 
-      {selected ? (
+      {selected?.kind === "black-hole" ? (
         <aside
           className="absolute right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 w-[min(calc(100vw-2rem),22.5rem)] rounded-xl border border-border bg-surface/90 p-5 shadow-[0_18px_50px_rgb(0_0_0/0.45)] backdrop-blur-md sm:right-6 sm:bottom-6"
           role="dialog"
