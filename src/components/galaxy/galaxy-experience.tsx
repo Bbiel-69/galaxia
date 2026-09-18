@@ -10,6 +10,7 @@ const KIND_LABEL: Record<BodyKind, string> = {
   star: "Estrela",
   nebula: "Nebulosa",
   galaxy: "Galáxia",
+  station: "Estação",
 };
 
 const MUTE_KEY = "horizonte-muted";
@@ -44,6 +45,7 @@ export function GalaxyExperience() {
         selectedIdRef.current = id;
         const body = id ? (bodyById(id) ?? null) : null;
         setSelected(body?.kind === "black-hole" ? body : null);
+        audio.setFocus(id);
         if (body) {
           setHint(false);
           audio.ping();
@@ -109,11 +111,13 @@ export function GalaxyExperience() {
     selectedIdRef.current = null;
     setSelected(null);
     engineRef.current?.select(null);
+    audioRef.current?.setFocus(null);
   }, []);
 
   const goHome = useCallback(() => {
     engineRef.current?.recenter();
     setHint(false);
+    audioRef.current?.setFocus("inicio");
   }, []);
 
   const onLabelClick = useCallback((id: string) => {
@@ -123,6 +127,7 @@ export function GalaxyExperience() {
     const body = bodyById(id) ?? null;
     setSelected(body?.kind === "black-hole" ? body : null);
     setHint(false);
+    audioRef.current?.setFocus(id);
     audioRef.current?.ping();
   }, []);
 
