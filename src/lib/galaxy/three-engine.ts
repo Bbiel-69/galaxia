@@ -76,12 +76,15 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
     bodies[i]!.set(b.x, b.y, b.size, (i * 0.173 + 0.37) % 1);
     colors[i]!.set(b.color[0], b.color[1], b.color[2]);
   });
+  const noiseData = new Uint8Array([96, 128, 160, 255, 160, 128, 96, 255, 128, 96, 160, 255, 180, 150, 120, 255]);
+  const noiseTexture = new THREE.DataTexture(noiseData, 2, 2, THREE.RGBAFormat);
+  noiseTexture.needsUpdate = true;
   const uniforms = {
     uRes: { value: new THREE.Vector2() }, uTime: { value: 0 }, uCam: { value: new THREE.Vector2() },
     uZoom: { value: 0.32 }, uBh: { value: new THREE.Vector2() }, uHorizon: { value: 1 },
     uSteps: { value: mobile ? 34 : 52 }, uReduced: { value: reduced ? 1 : 0 }, uPulse: { value: 0 },
     uN: { value: LIGHTS.length }, uHover: { value: -1 }, uSel: { value: -1 },
-    uBodies: { value: bodies }, uBodyCol: { value: colors }, uNoise: { value: null },
+    uBodies: { value: bodies }, uBodyCol: { value: colors }, uNoise: { value: noiseTexture },
   };
   const shader = new THREE.ShaderMaterial({ vertexShader: SCENE_VS, fragmentShader: SCENE_FS, uniforms, depthWrite: false, depthTest: false });
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), shader);
@@ -93,7 +96,7 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   const n = Math.floor(total / 3);
   const layers = [stars(n, 11, 12), stars(n, 31, 9), stars(total - n * 2, 71, 6.5)];
   layers.forEach((layer, i) => { layer.renderOrder = i + 2; root.add(layer); });
-  hooks.onProgress?.(total, total);
+  hooks.onProgress?.(0, total);\n  hooks.onProgress?.(Math.floor(total / 3), total);\n  hooks.onProgress?.(Math.floor((total * 2) / 3), total);\n  hooks.onProgress?.(total, total);
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
@@ -150,7 +153,7 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
     if (follow) { camX = lerp(camX, tx, tour ? 1.8 : 3.2, dt); camY = lerp(camY, ty, tour ? 1.8 : 3.2, dt); zoom = lerp(zoom, tz, tour ? 1.7 : 2.6, dt); }
     const { w, h } = size();
     camera.left = -w / h / (2 * zoom) + camX; camera.right = w / h / (2 * zoom) + camX; camera.top = 1 / (2 * zoom) + camY; camera.bottom = -1 / (2 * zoom) + camY; camera.updateProjectionMatrix();
-    uniforms.uTime.value = reduced ? 0 : now * 0.001; uniforms.uCam.value.set(camX, camY); uniforms.uZoom.value = zoom; uniforms.uHorizon.value = BH_WORLD_RS * zoom * h; uniforms.uPulse.value = pulse;
+    uniforms.uTime.value = reduced ? 0 : now * 0.001; uniforms.uCam.value.set(camX, camY); uniforms.uZoom.value = zoom; uniforms.uHorizon.value = BH_WORLD_RS * zoom * h * renderer.getPixelRatio(); uniforms.uPulse.value = pulse;
     uniforms.uHover.value = hover ? LIGHTS.findIndex((b) => b.id === hover) : -1; uniforms.uSel.value = selected ? LIGHTS.findIndex((b) => b.id === selected) : -1;
     layers.forEach((layer, i) => { const p = reduced ? 0 : [0.08, 0.17, 0.29][i]!; layer.position.set(-camX * p, -camY * p, 0); });
     labels(); composer.render();
@@ -183,7 +186,7 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   const ro = new ResizeObserver(resize); ro.observe(canvas); resize(); raf = requestAnimationFrame(loop);
 
   return {
-    destroy() { running = false; cancelAnimationFrame(raf); ro.disconnect(); canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", cancel); canvas.removeEventListener("wheel", wheel); window.removeEventListener("keydown", key); layers.forEach((x) => { x.geometry.dispose(); (x.material as THREE.Material).dispose(); }); plane.geometry.dispose(); shader.dispose(); bloom.dispose(); composer.dispose(); renderer.dispose(); },
+    destroy() { running = false; cancelAnimationFrame(raf); ro.disconnect(); canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", cancel); canvas.removeEventListener("wheel", wheel); window.removeEventListener("keydown", key); layers.forEach((x) => { x.geometry.dispose(); (x.material as THREE.Material).dispose(); }); plane.geometry.dispose(); shader.dispose(); noiseTexture.dispose(); bloom.dispose(); composer.dispose(); renderer.dispose(); },
     recenter, focus(id) { const b = BODIES.find((x) => x.id === id); if (b) { selected = id; focusBody(b); } }, setMuted() {}, select(id) { selected = id; }, toggleTour, stopTour,
   };
 }
