@@ -53,3 +53,12 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+.galaxy-hide-cursor,
+.galaxy-hide-cursor * {
+  cursor: none !important;
+}
+
+.galaxy-custom-cursor {
+  cursor: none !important;
+}
