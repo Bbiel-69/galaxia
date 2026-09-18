@@ -312,5 +312,7 @@ export function createFallbackEngine(
     select(id) {
       selId = id;
     },
+    toggleTour() {},
+    stopTour() {},
   };
 }
