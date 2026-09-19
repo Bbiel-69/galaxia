@@ -96,7 +96,10 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   const n = Math.floor(total / 3);
   const layers = [stars(n, 11, 12), stars(n, 31, 9), stars(total - n * 2, 71, 6.5)];
   layers.forEach((layer, i) => { layer.renderOrder = i + 2; root.add(layer); });
-  hooks.onProgress?.(0, total);\n  hooks.onProgress?.(Math.floor(total / 3), total);\n  hooks.onProgress?.(Math.floor((total * 2) / 3), total);\n  hooks.onProgress?.(total, total);
+  hooks.onProgress?.(0, total);
+  hooks.onProgress?.(Math.floor(total / 3), total);
+  hooks.onProgress?.(Math.floor((total * 2) / 3), total);
+  hooks.onProgress?.(total, total);
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
