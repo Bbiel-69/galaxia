@@ -12,6 +12,8 @@ export type EngineHooks = {
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
   onFrame: (labels: LabelPose[], zoom: number) => void;
+  onProgress?: (done: number, total: number) => void;
+  onTour?: (id: string | null, active: boolean) => void;
 };
 
 export type GalaxyEngine = {
@@ -20,6 +22,8 @@ export type GalaxyEngine = {
   focus: (id: string) => void;
   setMuted: (muted: boolean) => void;
   select: (id: string | null) => void;
+  toggleTour: () => void;
+  stopTour: () => void;
 };
 
 const LIGHTS = BODIES.filter((b) => b.kind !== "black-hole");
@@ -549,5 +553,7 @@ export function createGalaxyEngine(
     select(id: string | null) {
       selId = id;
     },
+    toggleTour() {},
+    stopTour() {},
   };
 }

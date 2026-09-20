@@ -4,25 +4,10 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { BH_WORLD_RS, BODIES, TOUR_ORDER, type CelestialBody } from "./bodies";
+import type { EngineHooks, GalaxyEngine } from "./engine";
 import { SCENE_FS, SCENE_VS } from "./shaders";
 
-export type LabelPose = { id: string; x: number; y: number; visible: boolean };
-export type EngineHooks = {
-  onHover: (id: string | null) => void;
-  onSelect: (id: string | null) => void;
-  onFrame: (labels: LabelPose[], zoom: number) => void;
-  onProgress?: (done: number, total: number) => void;
-  onTour?: (id: string | null, active: boolean) => void;
-};
-export type GalaxyEngine = {
-  destroy: () => void;
-  recenter: () => void;
-  focus: (id: string) => void;
-  setMuted: (muted: boolean) => void;
-  select: (id: string | null) => void;
-  toggleTour: () => void;
-  stopTour: () => void;
-};
+export type { GalaxyEngine } from "./engine";
 
 const LIGHTS = BODIES.filter((b) => b.kind !== "black-hole");
 const TOUR_MS = 4800;
