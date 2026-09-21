@@ -84,9 +84,49 @@ export function GalaxyExperience() {
       },
     };
 
+    /** Probe WebGL on a disposable canvas so the real <canvas> is never
+     *  "contaminated" with a WebGL context. A canvas can only have one
+     *  context type for its entire lifetime; calling getContext("webgl*")
+     *  and later getContext("2d") on the same element always returns null. */
+    const canWebGL = (() => {
+      try {
+        const probe = document.createElement("canvas");
+        const gl =
+          probe.getContext("webgl2") ||
+          probe.getContext("webgl") ||
+          probe.getContext("experimental-webgl");
+        return !!gl;
+      } catch {
+        return false;
+      }
+    })();
+
+    /** If the live canvas already has a WebGL context (or we need a clean
+     *  node for 2D), replace it with a clone before creating the fallback. */
+    const ensureCleanCanvasFor2D = (node: HTMLCanvasElement): HTMLCanvasElement => {
+      const clone = node.cloneNode(false) as HTMLCanvasElement;
+      clone.className = node.className;
+      clone.setAttribute("aria-label", node.getAttribute("aria-label") ?? "Galáxia interativa");
+      node.replaceWith(clone);
+      canvasRef.current = clone;
+      return clone;
+    };
+
     let engine: GalaxyEngine;
-    try { engine = createGalaxyEngine(canvas, hooks); setWebgl(true); }
-    catch { engine = createFallbackEngine(canvas, hooks); setWebgl(false); }
+    if (canWebGL) {
+      try {
+        engine = createGalaxyEngine(canvas, hooks);
+        setWebgl(true);
+      } catch {
+        // WebGL probe passed but runtime init failed (context lost, GPU block, etc.)
+        const clean = ensureCleanCanvasFor2D(canvas);
+        engine = createFallbackEngine(clean, hooks);
+        setWebgl(false);
+      }
+    } else {
+      engine = createFallbackEngine(canvas, hooks);
+      setWebgl(false);
+    }
     engineRef.current = engine;
     setProgress(100); setReady(true);
     const unlock = () => audio.start();
