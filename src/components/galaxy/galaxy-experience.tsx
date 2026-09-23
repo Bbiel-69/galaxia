@@ -8,6 +8,23 @@ import { createFallbackEngine } from "@/lib/galaxy/fallback";
 const KIND_LABEL: Record<BodyKind, string> = { "black-hole": "Singularidade", star: "Estrela", nebula: "Nebulosa", galaxy: "Galáxia", station: "Estação" };
 const MUTE_KEY = "horizonte-muted";
 
+function supportsWebgl2(): boolean {
+  const probe = document.createElement("canvas");
+  try {
+    return Boolean(probe.getContext("webgl2", {
+      alpha: false,
+      antialias: false,
+      premultipliedAlpha: false,
+      powerPreference: "high-performance",
+    }));
+  } catch {
+    return false;
+  } finally {
+    probe.width = 1;
+    probe.height = 1;
+  }
+}
+
 export function GalaxyExperience() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GalaxyEngine | null>(null);
@@ -85,8 +102,21 @@ export function GalaxyExperience() {
     };
 
     let engine: GalaxyEngine;
-    try { engine = createGalaxyEngine(canvas, hooks); setWebgl(true); }
-    catch { engine = createFallbackEngine(canvas, hooks); setWebgl(false); }
+    if (!supportsWebgl2()) {
+      engine = createFallbackEngine(canvas, hooks);
+      setWebgl(false);
+    } else {
+      try {
+        engine = createGalaxyEngine(canvas, hooks);
+        setWebgl(true);
+      } catch {
+        const fallbackCanvas = canvas.cloneNode(true) as HTMLCanvasElement;
+        canvas.replaceWith(fallbackCanvas);
+        canvasRef.current = fallbackCanvas;
+        engine = createFallbackEngine(fallbackCanvas, hooks);
+        setWebgl(false);
+      }
+    }
     engineRef.current = engine;
     setProgress(100); setReady(true);
     const unlock = () => audio.start();
