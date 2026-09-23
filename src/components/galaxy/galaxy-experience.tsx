@@ -8,20 +8,27 @@ import { createFallbackEngine } from "@/lib/galaxy/fallback";
 const KIND_LABEL: Record<BodyKind, string> = { "black-hole": "Singularidade", star: "Estrela", nebula: "Nebulosa", galaxy: "Galáxia", station: "Estação" };
 const MUTE_KEY = "horizonte-muted";
 
-function supportsWebgl2(): boolean {
-  const probe = document.createElement("canvas");
+function canUseWebgl2(): boolean {
+  const probeCanvas = document.createElement("canvas");
   try {
-    return Boolean(probe.getContext("webgl2", {
+    const probeContext = probeCanvas.getContext("webgl2", {
       alpha: false,
       antialias: false,
       premultipliedAlpha: false,
       powerPreference: "high-performance",
-    }));
+    });
+    if (!probeContext) return false;
+
+    // The probe must never become the app canvas. Release its context before
+    // dropping the temporary node so the real canvas remains untouched.
+    probeContext.getExtension("WEBGL_lose_context")?.loseContext();
+    return true;
   } catch {
     return false;
   } finally {
-    probe.width = 1;
-    probe.height = 1;
+    probeCanvas.width = 1;
+    probeCanvas.height = 1;
+    probeCanvas.remove();
   }
 }
 
@@ -102,7 +109,7 @@ export function GalaxyExperience() {
     };
 
     let engine: GalaxyEngine;
-    if (!supportsWebgl2()) {
+    if (!canUseWebgl2()) {
       engine = createFallbackEngine(canvas, hooks);
       setWebgl(false);
     } else {
@@ -110,6 +117,8 @@ export function GalaxyExperience() {
         engine = createGalaxyEngine(canvas, hooks);
         setWebgl(true);
       } catch {
+        // WebGLRenderer may have claimed the real canvas before failing.
+        // Canvas context types are immutable, so never try 2D on this node.
         const fallbackCanvas = canvas.cloneNode(true) as HTMLCanvasElement;
         canvas.replaceWith(fallbackCanvas);
         canvasRef.current = fallbackCanvas;
