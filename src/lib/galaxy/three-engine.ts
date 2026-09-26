@@ -174,7 +174,8 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   const ro = new ResizeObserver(resize); ro.observe(canvas); resize(); raf = requestAnimationFrame(loop);
 
   return {
-    destroy() { running = false; cancelAnimationFrame(raf); ro.disconnect(); canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", cancel); canvas.removeEventListener("wheel", wheel); window.removeEventListener("keydown", key); layers.forEach((x) => { x.geometry.dispose(); (x.material as THREE.Material).dispose(); }); plane.geometry.dispose(); shader.dispose(); noiseTexture.dispose(); bloom.dispose(); composer.dispose(); renderer.dispose(); },
+    destroy() { running = false; cancelAnimationFrame(raf); ro.disconnect(); canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", cancel); canvas.removeEventListener("wheel", wheel); window.removeEventListener("keydown", key); layers.forEach((x) => { x.geometry.dispose(); (x.material as THREE.Material).dispose(); }); plane.geometry.dispose(); shader.dispose(); noiseTexture.dispose(); bloom.dispose(); composer.dispose(); renderer.dispose(); renderer.forceContextLoss(); },
     recenter, focus(id) { const b = BODIES.find((x) => x.id === id); if (b) { selected = id; focusBody(b); } }, setMuted() {}, select(id) { selected = id; }, toggleTour, stopTour,
   };
-}
+      }
+                                                                                                      
