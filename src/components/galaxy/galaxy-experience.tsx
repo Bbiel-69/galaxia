@@ -42,6 +42,7 @@ export function GalaxyExperience() {
   const [selected, setSelected] = useState<CelestialBody | null>(null);
   const [tourBody, setTourBody] = useState<CelestialBody | null>(null);
   const [tourActive, setTourActive] = useState(false);
+  const tourActiveRef = useRef(false);
   const [hint, setHint] = useState(true);
   const [muted, setMuted] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -92,12 +93,21 @@ export function GalaxyExperience() {
     const hooks = {
       onHover: () => {},
       onProgress: (done: number, total: number) => setProgress(total ? Math.round((done / total) * 100) : 0),
-      onTour: (id: string | null, active: boolean) => { setTourActive(active); setTourBody(id ? bodyById(id) ?? null : null); },
+      onTour: (id: string | null, active: boolean) => {
+        tourActiveRef.current = active;
+        setTourActive(active);
+        setTourBody(id ? bodyById(id) ?? null : null);
+        if (active) setSelected(null);
+      },
       onSelect: (id: string | null) => {
         const body = id ? bodyById(id) ?? null : null;
-        setSelected(body?.kind === "black-hole" ? body : null);
+        setSelected(null);
         audio.setFocus(id);
         if (body) { setHint(false); audio.ping(); }
+      },
+      onFocusComplete: (id: string | null) => {
+        if (tourActiveRef.current) return;
+        setSelected(id ? bodyById(id) ?? null : null);
       },
       onFrame: (next: { id: string; x: number; y: number; visible: boolean }[]) => {
         for (const label of next) {
@@ -160,7 +170,7 @@ export function GalaxyExperience() {
   const toggleMute = useCallback(() => {
     setMuted((prev) => { const next = !prev; audioRef.current?.setMuted(next); window.localStorage.setItem(MUTE_KEY, next ? "1" : "0"); if (!next) audioRef.current?.start(); return next; });
   }, []);
-  const closePanel = useCallback(() => { setSelected(null); engineRef.current?.select(null); audioRef.current?.setFocus(null); }, []);
+  const closePanel = useCallback(() => { engineRef.current?.closeFocus(); setSelected(null); audioRef.current?.setFocus(null); }, []);
   const goHome = useCallback(() => { engineRef.current?.recenter(); setHint(false); audioRef.current?.setFocus("inicio"); }, []);
   const toggleTour = useCallback(() => { if (reduced) return; engineRef.current?.toggleTour(); }, [reduced]);
   const stopTour = useCallback(() => { engineRef.current?.stopTour(); setTourActive(false); setTourBody(null); }, []);
@@ -179,7 +189,7 @@ export function GalaxyExperience() {
       <div className="pointer-events-none absolute inset-0 opacity-[0.07] mix-blend-overlay" style={{ backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.9'/></svg>\")" }} aria-hidden />
 
       {BODIES.filter((b) => b.kind !== "black-hole").map((body) => (
-        <button key={body.id} type="button" ref={(node) => { if (node) labelRefs.current.set(body.id, node); else labelRefs.current.delete(body.id); }} onClick={() => { engineRef.current?.focus(body.id); engineRef.current?.select(body.id); audioRef.current?.setFocus(body.id); setHint(false); }} title={body.name} className="absolute top-0 left-0 z-10 min-h-11 px-2 text-center will-change-transform" style={{ opacity: 0, pointerEvents: "none" }}>
+        <button key={body.id} type="button" ref={(node) => { if (node) labelRefs.current.set(body.id, node); else labelRefs.current.delete(body.id); }} onPointerEnter={() => engineRef.current?.setHover(body.id)} onPointerLeave={() => engineRef.current?.setHover(null)} onClick={() => engineRef.current?.focus(body.id)} title={body.name} className="absolute top-0 left-0 z-10 min-h-11 px-2 text-center will-change-transform" style={{ opacity: 0, pointerEvents: "none" }}>
           <span className="inline-flex items-center gap-1 font-sans text-[11px] font-medium tracking-[0.18em] text-accent uppercase">{body.name}{body.href ? <ExternalLink className="size-3 opacity-70" aria-hidden /> : null}</span>
         </button>
       ))}
@@ -201,7 +211,13 @@ export function GalaxyExperience() {
 
       {hint ? <p className="pointer-events-none absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-20 w-[min(92vw,28rem)] -translate-x-1/2 text-center font-sans text-xs tracking-[0.18em] text-muted uppercase">arraste para explorar · clique nos pontos de luz · tour percorre os objetos</p> : null}
 
-      {selected?.kind === "black-hole" ? <aside className="absolute right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 w-[min(calc(100vw-2rem),22.5rem)] rounded-xl border border-border bg-surface/90 p-5 shadow-[0_18px_50px_rgb(0_0_0/0.45)] backdrop-blur-md sm:right-6 sm:bottom-6" role="dialog" aria-labelledby="body-title"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="font-sans text-[10px] tracking-[0.26em] text-muted uppercase">{KIND_LABEL[selected.kind]}</p><h2 id="body-title" className="font-display text-3xl leading-none">{selected.name}</h2><p className="mt-1 font-sans text-sm text-muted">{selected.subtitle}</p></div><IconBtn label="Fechar" onClick={closePanel}><X className="size-4" /></IconBtn></div><p className="font-sans text-sm leading-relaxed text-fg/85">{selected.blurb}</p>{selected.href ? <a href={selected.href} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-1.5 font-sans text-xs font-medium tracking-[0.14em] text-accent uppercase underline-offset-4 hover:underline">Visitar <ExternalLink className="size-3.5" /></a> : null}</aside> : null}
+      {selected && !tourActive ? <aside className="absolute right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 w-[min(calc(100vw-2rem),22.5rem)] rounded-xl border border-white/15 bg-surface/75 p-4 shadow-[0_18px_50px_rgb(0_0_0/0.45)] backdrop-blur-xl sm:right-6 sm:bottom-6" role="dialog" aria-labelledby="body-title">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="body-title" className="font-display text-2xl leading-none">{selected.name}</h2>
+          <IconBtn label="Fechar" onClick={closePanel}><X className="size-4" /></IconBtn>
+        </div>
+        {selected.href ? <a href={selected.href} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-sans text-xs font-medium tracking-[0.14em] text-accent uppercase underline-offset-4 hover:underline">Visitar <ExternalLink className="size-3.5" /></a> : null}
+      </aside> : null}
 
       <span className="sr-only" aria-live="polite">{ready ? (webgl ? "Galáxia pronta." : "Galáxia em modo simplificado.") : `Gerando galáxia: ${progress}%.`}</span>
     </div>

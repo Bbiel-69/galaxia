@@ -11,6 +11,7 @@ export type LabelPose = {
 export type EngineHooks = {
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
+  onFocusComplete?: (id: string | null) => void;
   onFrame: (labels: LabelPose[], zoom: number) => void;
   onProgress?: (done: number, total: number) => void;
   onTour?: (id: string | null, active: boolean) => void;
@@ -20,6 +21,8 @@ export type GalaxyEngine = {
   destroy: () => void;
   recenter: () => void;
   focus: (id: string) => void;
+  closeFocus: () => void;
+  setHover: (id: string | null) => void;
   setMuted: (muted: boolean) => void;
   select: (id: string | null) => void;
   toggleTour: () => void;
@@ -180,6 +183,7 @@ export function createGalaxyEngine(
   let follow = true;
   let hoverId: string | null = null;
   let selId: string | null = null;
+  let returnView: { x: number; y: number; zoom: number } | null = null;
   let running = true;
   let raf = 0;
   let last = performance.now();
@@ -403,11 +407,13 @@ export function createGalaxyEngine(
       const wpos = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
       const hit = hitTest(wpos.x, wpos.y);
       if (hit) {
+        if (selId == null && !returnView) returnView = { x: camX, y: camY, zoom };
         selId = hit.id;
         hooks.onSelect(hit.id);
         focusBody(hit, false);
       } else {
         selId = null;
+        returnView = null;
         hooks.onSelect(null);
       }
     }
@@ -473,8 +479,7 @@ export function createGalaxyEngine(
   function onKey(e: KeyboardEvent) {
     const pan = 0.28 / zoom;
     if (e.key === "Escape") {
-      selId = null;
-      hooks.onSelect(null);
+      closeFocus();
     } else if (e.key === "Home" || e.key === "0") {
       recenter();
     } else if (e.key === "+" || e.key === "=") {
@@ -499,12 +504,26 @@ export function createGalaxyEngine(
   }
 
   function recenter() {
+    if (selId == null && !returnView) returnView = { x: camX, y: camY, zoom };
     follow = true;
     tCamX = 0;
     tCamY = 0;
     tZoom = homeZoom();
     selId = "inicio";
     hooks.onSelect("inicio");
+  }
+
+  function closeFocus() {
+    selId = null;
+    hooks.onSelect(null);
+    hooks.onFocusComplete?.(null);
+    if (returnView) {
+      follow = true;
+      tCamX = returnView.x;
+      tCamY = returnView.y;
+      tZoom = returnView.zoom;
+      returnView = null;
+    }
   }
 
   canvas.style.cursor = "grab";
@@ -544,9 +563,12 @@ export function createGalaxyEngine(
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     },
     recenter,
+    closeFocus,
+    setHover,
     focus(id: string) {
       const b = BODIES.find((x) => x.id === id);
       if (!b) return;
+      if (selId == null && !returnView) returnView = { x: camX, y: camY, zoom };
       selId = id;
       focusBody(b, false);
     },

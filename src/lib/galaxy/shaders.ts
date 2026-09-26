@@ -94,7 +94,8 @@ vec3 starLayer(vec2 uv, float scale, float thresh, float time) {
         float core = exp(-d * d * mix(1800.0, 420.0, mag));
         float halo = exp(-d * d * mix(90.0, 22.0, mag));
         vec3 tint = mix(vec3(0.72, 0.84, 1.0), vec3(1.0, 0.86, 0.7), hash21(cid + 19.0));
-        acc += tint * (core * 1.35 + halo * 0.22) * mag * tw;
+        float flare = exp(-q.x * q.x * 2200.0 - q.y * q.y * 20.0) + exp(-q.y * q.y * 2200.0 - q.x * q.x * 20.0);
+        acc += tint * (core * 1.5 + halo * 0.3 + flare * 0.08) * mag * tw;
       }
     }
   }
@@ -104,14 +105,21 @@ vec3 starLayer(vec2 uv, float scale, float thresh, float time) {
 vec3 galaxyField(vec2 w) {
   float r = length(w);
   float arms = spiralArm(w);
-  float nbg = noise2(w * 0.045 + 0.5);
-  float nfg = noise2(w * 0.11 + vec2(0.2, 0.7));
+  float drift = uReduced > 0.5 ? 0.0 : uTime * 0.0008;
+  float nbg = noise2(w * 0.11 + vec2(drift, 0.5 - drift * 0.6));
+  float nfg = noise2(w * 0.27 + vec2(0.2 + drift * 1.8, 0.7));
+  float wisps = noise2(w * 0.53 + vec2(-drift, 0.17 + drift));
+  float cloud = nbg * 0.56 + nfg * 0.3 + wisps * 0.14;
+  float cloudShape = smoothstep(0.34, 0.76, cloud);
 
-  vec3 dust = vec3(0.035, 0.05, 0.09);
-  vec3 nebA = vec3(0.18, 0.07, 0.05);
-  vec3 nebB = vec3(0.05, 0.09, 0.16);
-  vec3 neb = mix(nebA, nebB, nbg) * (0.35 + arms * 1.4) * (0.4 + nfg);
-  neb *= smoothstep(5.8, 0.4, r);
+  vec3 dust = vec3(0.025, 0.033, 0.064);
+  vec3 nebA = vec3(0.15, 0.075, 0.14);
+  vec3 nebB = vec3(0.045, 0.10, 0.17);
+  vec3 nebC = vec3(0.16, 0.105, 0.064);
+  vec3 neb = mix(nebA, nebB, nbg);
+  neb = mix(neb, nebC, smoothstep(0.54, 0.9, nfg));
+  neb *= cloudShape * (0.24 + arms * 0.84) * (0.62 + nfg * 0.54);
+  neb *= smoothstep(6.2, 0.5, r);
 
   vec3 col = dust + neb;
 
@@ -222,18 +230,19 @@ vec3 marchHole(vec2 uv) {
       float mu = dot(tng, normalize(vel));
       float dop = clamp(1.0 + beta * mu * 1.85, 0.32, 2.55);
       dc *= pow(dop, 3.2);
-      vec3 cool = vec3(1.25, 0.22, 0.05) * dc.r;
-      vec3 hot = vec3(0.55, 0.78, 1.35);
+      vec3 cool = mix(vec3(0.58, 0.42, 0.88), vec3(1.0, 0.48, 0.68), smoothstep(rIn, rOut, rho));
+      cool *= 0.7 + dc.r * 0.35;
+      vec3 hot = vec3(0.76, 0.68, 1.35);
       dc = mix(cool, dc, smoothstep(0.62, 1.2, dop));
       dc += hot * max(dop - 1.18, 0.0) * 0.7;
 
       float hs = pow(clamp(0.5 + 0.5 * cos(ang - kep * 2.4), 0.0, 1.0), 8.0);
-      dc += hs * vec3(1.45, 0.95, 0.5) * (1.2 + uPulse * 3.2);
+      dc += hs * vec3(1.45, 1.0, 0.72) * (1.2 + uPulse * 3.2);
 
       float qpo = 0.88 + 0.12 * sin(uTime * 2.7 + rho);
       float a = dens * dt * 3.55 * qpo;
       a = clamp(a, 0.0, 0.88);
-      col += tr * a * dc * 1.45;
+      col += tr * a * dc * 1.72;
       tr *= 1.0 - a * 0.9;
     }
 
@@ -260,7 +269,7 @@ vec3 marchHole(vec2 uv) {
   col += ring * vec3(1.0, 0.72, 0.4) * (0.35 + 0.65 * (1.0 - tr));
 
   float glow = exp(-sil * 0.11) * (0.10 + 0.06 * uPulse);
-  col += glow * vec3(1.0, 0.42, 0.14);
+  col += glow * vec3(0.86, 0.56, 0.82);
 
   float lum = dot(col, vec3(0.299, 0.587, 0.114));
   col += col * smoothstep(0.55, 2.4, lum) * 0.38;
@@ -281,8 +290,8 @@ vec3 beacons(vec2 w) {
     if (uReduced > 0.5) tw = 0.9;
     float sel = (uSel == i) ? 1.35 : 1.0;
     float hov = (uHover == i) ? 1.25 : 1.0;
-    float core = exp(-dist * dist * (90.0 / max(sz, 0.2))) * 1.4;
-    float halo = exp(-dist * dist * (8.5 / max(sz, 0.2))) * 0.55;
+    float core = exp(-dist * dist * (90.0 / max(sz, 0.2))) * 1.55;
+    float halo = exp(-dist * dist * (8.5 / max(sz, 0.2))) * 0.72;
     float ring = smoothstep(0.07 * sz, 0.0, abs(dist - 0.085 * sz)) * 0.45 * hov;
     vec3 c = uBodyCol[i];
     acc += c * (core + halo) * tw * sel * hov;
