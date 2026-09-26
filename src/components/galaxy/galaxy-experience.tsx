@@ -48,6 +48,7 @@ export function GalaxyExperience() {
   const [ready, setReady] = useState(false);
   const [webgl, setWebgl] = useState(true);
   const [reduced, setReduced] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     setReduced(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -108,10 +109,20 @@ export function GalaxyExperience() {
       },
     };
 
-    let engine: GalaxyEngine;
+    const unlock = () => audio.start();
+    window.addEventListener("pointerdown", unlock, { once: true });
+
+    let engine: GalaxyEngine | null = null;
     if (!canUseWebgl2()) {
-      engine = createFallbackEngine(canvas, hooks);
-      setWebgl(false);
+      try {
+        engine = createFallbackEngine(canvas, hooks);
+        setWebgl(false);
+      } catch {
+        // Even 2D canvas is unavailable on this device/browser (e.g. GPU
+        // process crashed or the browser's live-canvas-context budget was
+        // exhausted). Fall through to the static, non-canvas experience
+        // below instead of letting this bubble up and crash the route.
+      }
     } else {
       try {
         engine = createGalaxyEngine(canvas, hooks);
@@ -119,17 +130,30 @@ export function GalaxyExperience() {
       } catch {
         // WebGLRenderer may have claimed the real canvas before failing.
         // Canvas context types are immutable, so never try 2D on this node.
-        const fallbackCanvas = canvas.cloneNode(true) as HTMLCanvasElement;
-        canvas.replaceWith(fallbackCanvas);
-        canvasRef.current = fallbackCanvas;
-        engine = createFallbackEngine(fallbackCanvas, hooks);
-        setWebgl(false);
+        try {
+          const fallbackCanvas = canvas.cloneNode(true) as HTMLCanvasElement;
+          canvas.replaceWith(fallbackCanvas);
+          canvasRef.current = fallbackCanvas;
+          engine = createFallbackEngine(fallbackCanvas, hooks);
+          setWebgl(false);
+        } catch {
+          // Same last-resort as above: no canvas rendering path worked.
+        }
       }
     }
     engineRef.current = engine;
+    if (!engine) {
+      // No renderer could be created at all (e.g. the device blocked every
+      // canvas context, which happens on some Android phones in battery
+      // saver mode). Show a friendly message instead of leaving the page
+      // in a broken/crashed state.
+      setWebgl(false);
+      setUnavailable(true);
+      setReady(true);
+      setProgress(100);
+      return () => { window.removeEventListener("pointerdown", unlock); audio.dispose(); audioRef.current = null; };
+    }
     setProgress(100); setReady(true);
-    const unlock = () => audio.start();
-    window.addEventListener("pointerdown", unlock, { once: true });
     return () => { window.removeEventListener("pointerdown", unlock); engine.destroy(); audio.dispose(); engineRef.current = null; audioRef.current = null; };
   }, []);
 
@@ -170,6 +194,8 @@ export function GalaxyExperience() {
       </header>
 
       {!ready ? <div className="absolute inset-0 z-40 grid place-items-center bg-bg/80 backdrop-blur-sm"><div className="w-[min(78vw,20rem)]"><div className="mb-3 flex justify-between font-sans text-xs tracking-[0.18em] text-muted uppercase"><span>Gerando galáxia</span><span>{progress}%</span></div><div className="h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${progress}%` }} /></div><p className="mt-2 text-center font-sans text-[10px] tracking-[0.16em] text-muted uppercase">{progress < 100 ? "Preparando estrelas" : "Pronta"}</p></div></div> : null}
+
+      {ready && unavailable ? <div className="absolute inset-0 z-40 grid place-items-center bg-bg px-6 text-center"><div className="max-w-xs"><p className="font-sans text-[10px] tracking-[0.26em] text-muted uppercase">Observatório</p><h2 className="mt-1 font-display text-2xl leading-tight text-fg">Não foi possível carregar a galáxia</h2><p className="mt-3 font-sans text-sm leading-relaxed text-muted">O navegador bloqueou a renderização (comum em modo de economia de bateria). Tente recarregar a página ou desativar a economia de bateria.</p></div></div> : null}
 
       {tourActive && tourBody ? <aside className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-30 w-[min(calc(100vw-2rem),30rem)] -translate-x-1/2 rounded-xl border border-border bg-surface/88 p-4 text-center shadow-[0_18px_50px_rgb(0_0_0/0.45)] backdrop-blur-md"><p className="font-sans text-[10px] tracking-[0.26em] text-muted uppercase">Tour · {KIND_LABEL[tourBody.kind]}</p><h2 className="mt-1 font-display text-3xl leading-none">{tourBody.name}</h2><p className="mt-1 font-sans text-sm text-muted">{tourBody.subtitle}</p><p className="mt-2 font-sans text-sm leading-relaxed text-fg/80">{tourBody.blurb}</p></aside> : null}
 
