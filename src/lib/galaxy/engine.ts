@@ -541,6 +541,7 @@ export function createGalaxyEngine(
       gl.deleteBuffer(pBuffer);
       gl.deleteVertexArray(pVao);
       gl.deleteVertexArray(sceneVao);
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
     },
     recenter,
     focus(id: string) {
@@ -556,4 +557,5 @@ export function createGalaxyEngine(
     toggleTour() {},
     stopTour() {},
   };
-}
+        }
+  
