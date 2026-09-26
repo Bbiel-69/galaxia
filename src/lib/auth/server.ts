@@ -85,6 +85,26 @@ const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET
 export const authConfigured =
   !authDisabled && Boolean(grokClientId && grokClientSecret);
 
+const runningOnVercel = env("VERCEL") === "1";
+if (runningOnVercel && !authDisabled) {
+  const missing = [
+    ["GROK_AUTH_ISSUER", env("GROK_AUTH_ISSUER")],
+    ["GROK_AUTH_CLIENT_ID", env("GROK_AUTH_CLIENT_ID")],
+    ["GROK_AUTH_CLIENT_SECRET", env("GROK_AUTH_CLIENT_SECRET")],
+    ["BETTER_AUTH_URL", env("BETTER_AUTH_URL")],
+    ["BETTER_AUTH_SECRET", env("BETTER_AUTH_SECRET")],
+    ["DATABASE_URL", env("DATABASE_URL")],
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+  if (missing.length > 0) {
+    throw new Error(
+      `[auth] VITE_AUTH_ENABLED is true on Vercel, but required production ` +
+        `configuration is missing: ${missing.join(", ")}`,
+    );
+  }
+}
+
 // This app's own Better Auth origin. When deployed the deployer injects the
 // public URL. In the sandbox live preview there's no fixed URL (each preview gets
 // a dynamic `*.grok-sandbox.com` host), so we hand Better Auth a dynamic baseURL:

@@ -254,6 +254,7 @@ export function readOgSite(cwd = process.cwd()) {
 
 /** Public path of an on-disk share card, or "" if neither file exists. */
 export function ogCardPublicPath(cwd = process.cwd()) {
+  if (!cwd) return "";
   if (existsSync(join(cwd, "public/og.jpg"))) return "/og.jpg";
   if (existsSync(join(cwd, "public/og.png"))) return "/og.png";
   return "";
@@ -303,13 +304,14 @@ export function resolveOgTitle(
   host = "",
   documentTitle = "",
 ) {
-  const fromSite = String(site.title ?? "").trim();
-  if (fromSite) return fromSite;
   const fromDoc = String(documentTitle ?? "").trim();
   if (fromDoc) return fromDoc;
+  const fromArg = String(appName ?? "").trim();
+  if (fromArg && fromArg !== DEFAULT_APP_NAME) return fromArg;
+  const fromSite = String(site.title ?? "").trim();
+  if (fromSite) return fromSite;
   const fromHost = appNameFromHost(host);
   if (fromHost && fromHost !== DEFAULT_APP_NAME) return fromHost;
-  const fromArg = String(appName ?? "").trim();
   return fromArg || DEFAULT_APP_NAME;
 }
 
@@ -323,7 +325,10 @@ export function siteHasCustomCard(site = {}) {
  * Otherwise empty — caller emits the og.grok.me placeholder.
  */
 export function resolveOgCardAsset(site = {}, cwd = process.cwd()) {
-  return ogCardPublicPath(cwd) || (detectCustomOgCard(cwd, site) ? String(site.image ?? "").trim() || "/og.jpg" : "");
+  const disk = cwd ? ogCardPublicPath(cwd) : "";
+  return disk || (siteHasCustomCard(site) || Boolean(String(site.image ?? "").trim())
+    ? String(site.image ?? "").trim() || "/og.jpg"
+    : "");
 }
 
 /** Stamp `card=custom` when public/og.jpg or public/og.png is on disk. */
@@ -401,13 +406,13 @@ function insertBeforeHeadClose(html, snippet) {
 }
 
 export function normalizeHeadContext(ctx = {}) {
-  const cwd = ctx.cwd ?? process.cwd();
+  const cwd = ctx.cwd ?? "";
   // Middleware passes a baked `site`. Still consult the workspace so a
   // public/og.jpg generated after that snapshot (or missed by a wrong cwd)
   // wins over the og.grok.me placeholder. Vercel has no public/ to read, so
   // a correct bake is unchanged.
   const site = applyCustomCardFromFs(
-    ctx.site !== undefined ? ctx.site : snapshotOgIdentity(cwd).site,
+    ctx.site !== undefined ? ctx.site : cwd ? snapshotOgIdentity(cwd).site : {},
     cwd,
   );
   const appName = resolveOgTitle(site, ctx.appName ?? DEFAULT_APP_NAME, ctx.host ?? "");
