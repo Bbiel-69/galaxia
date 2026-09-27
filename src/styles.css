@@ -1,8 +1,9 @@
 @import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Outfit:wght@300;400;500;600&display=swap");
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @theme {
-  --color-bg: #07060c;
+  --color-bg: #03040a;
   --color-surface: #12111a;
   --color-fg: #f2efe8;
   --color-muted: #8b8896;

@@ -186,7 +186,7 @@ export function GalaxyExperience() {
         <span className="fixed left-0 top-0 font-sans text-[16px] text-accent" style={{ transform: "translate(-50%,-58%)" }}>✦</span>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 opacity-[0.07] mix-blend-overlay" style={{ backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.9'/></svg>\")" }} aria-hidden />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.07] mix-blend-overlay" style={{ backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.9'/></svg>)\"" }} aria-hidden />
 
       {BODIES.filter((b) => b.kind !== "black-hole").map((body) => (
         <button key={body.id} type="button" ref={(node) => { if (node) labelRefs.current.set(body.id, node); else labelRefs.current.delete(body.id); }} onPointerEnter={() => engineRef.current?.setHover(body.id)} onPointerLeave={() => engineRef.current?.setHover(null)} onClick={() => engineRef.current?.focus(body.id)} title={body.name} className="absolute top-0 left-0 z-10 min-h-11 px-2 text-center will-change-transform" style={{ opacity: 0, pointerEvents: "none" }}>
@@ -211,7 +211,7 @@ export function GalaxyExperience() {
 
       {hint ? <p className="pointer-events-none absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-20 w-[min(92vw,28rem)] -translate-x-1/2 text-center font-sans text-xs tracking-[0.18em] text-muted uppercase">arraste para explorar · clique nos pontos de luz · tour percorre os objetos</p> : null}
 
-      {selected && !tourActive ? <aside className="absolute right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 w-[min(calc(100vw-2rem),22.5rem)] rounded-xl border border-white/15 bg-surface/75 p-4 shadow-[0_18px_50px_rgb(0_0_0/0.45)] backdrop-blur-xl sm:right-6 sm:bottom-6" role="dialog" aria-labelledby="body-title">
+      {selected && !tourActive ? <aside className="absolute right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 w-[min(calc(100vw-2rem),22.5rem)] animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-white/15 bg-surface/75 p-4 shadow-[0_18px_50px_rgb(0_0_0/0.45),0_0_44px_-16px_rgba(255,170,110,0.35)] backdrop-blur-xl duration-300 sm:right-6 sm:bottom-6" role="dialog" aria-labelledby="body-title">
         <div className="flex items-center justify-between gap-3">
           <h2 id="body-title" className="font-display text-2xl leading-none">{selected.name}</h2>
           <IconBtn label="Fechar" onClick={closePanel}><X className="size-4" /></IconBtn>
@@ -225,5 +225,5 @@ export function GalaxyExperience() {
 }
 
 function IconBtn({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
-  return <button type="button" onClick={onClick} aria-label={label} className="inline-flex size-11 items-center justify-center rounded-md border border-border bg-surface/70 text-accent backdrop-blur-sm transition-[transform,background-color] duration-150 ease-out hover:bg-surface active:scale-[0.96]">{children}</button>;
+  return <button type="button" onClick={onClick} aria-label={label} className="inline-flex size-11 items-center justify-center rounded-md border border-border bg-surface/70 text-accent backdrop-blur-sm transition-[transform,background-color,box-shadow] duration-150 ease-out hover:bg-surface hover:shadow-[0_0_18px_-4px_rgba(255,180,120,0.45)] active:scale-[0.96]">{children}</button>;
 }
