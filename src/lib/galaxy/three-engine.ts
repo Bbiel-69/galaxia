@@ -19,40 +19,74 @@ function coarse() {
 function lerp(current: number, target: number, speed: number, dt: number) {
   return current + (target - current) * (1 - Math.exp(-speed * dt));
 }
-function stars(count: number, seed: number, spread: number) {
-  const geometry = new THREE.CircleGeometry(0.009, 4);
-  const material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.78, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true });
-  const mesh = new THREE.InstancedMesh(geometry, material, count);
-  const m = new THREE.Matrix4();
-  const c = new THREE.Color();
-  let s = seed >>> 0;
-  const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-  for (let i = 0; i < count; i++) {
-    const r = Math.pow(rnd(), 0.62) * spread + 0.3;
-    const a = rnd() * Math.PI * 2;
-    const scale = 0.35 + rnd() * 1.9;
-    m.makeTranslation(Math.cos(a) * r, Math.sin(a) * r * (0.34 + rnd() * 0.45), 0).scale(new THREE.Vector3(scale, scale, scale));
-    mesh.setMatrixAt(i, m);
-    c.setRGB(0.62 + rnd() * 0.38, 0.68 + rnd() * 0.32, 0.85 + rnd() * 0.15);
-    mesh.setColorAt(i, c);
+function makeStarSprite() {
+  const size = 64;
+  const data = new Uint8Array(size * size * 4);
+  const c = (size - 1) * 0.5;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (x - c) / c;
+      const dy = (y - c) / c;
+      const r2 = dx * dx + dy * dy;
+      const core = Math.exp(-r2 * 120);
+      const glow = Math.exp(-r2 * 8) * 0.55;
+      const halo = Math.exp(-r2 * 2.1) * 0.2;
+      const spx = Math.exp(-Math.abs(dx) * 30 - dy * dy * 95);
+      const spy = Math.exp(-Math.abs(dy) * 30 - dx * dx * 95);
+      const v = Math.min(1, core * 1.25 + glow + halo + (spx + spy) * 0.7);
+      const i = (y * size + x) * 4;
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+      data[i + 3] = Math.round(v * 255);
+    }
   }
-  mesh.instanceMatrix.needsUpdate = true;
-  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  return mesh;
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function hashNoise(x: number, y: number) {
+  let n = x * 374761393 + y * 668265263;
+  n = (n ^ (n >> 13)) * 1274126177;
+  return ((n ^ (n >> 16)) >>> 0) / 4294967296;
+}
+
+function valueNoise(x: number, y: number, freq: number) {
+  const fx = x * freq;
+  const fy = y * freq;
+  const ix = Math.floor(fx);
+  const iy = Math.floor(fy);
+  const tx = fx - ix;
+  const ty = fy - iy;
+  const sx = tx * tx * (3 - 2 * tx);
+  const sy = ty * ty * (3 - 2 * ty);
+  const a = hashNoise(ix, iy);
+  const b = hashNoise(ix + 1, iy);
+  const c = hashNoise(ix, iy + 1);
+  const d = hashNoise(ix + 1, iy + 1);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
 }
 
 function createNoiseTexture() {
-  const size = 128;
+  const size = 256;
   const data = new Uint8Array(size * size * 4);
-  let seed = 7193;
-  for (let i = 0; i < size * size; i++) {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    const value = seed >>> 24;
-    const offset = i * 4;
-    data[offset] = value;
-    data[offset + 1] = value;
-    data[offset + 2] = value;
-    data[offset + 3] = 255;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = x / size;
+      const ny = y / size;
+      const n =
+        valueNoise(nx, ny, 4) * 0.5 +
+        valueNoise(nx, ny, 8) * 0.25 +
+        valueNoise(nx, ny, 16) * 0.15 +
+        valueNoise(nx, ny, 32) * 0.1;
+      const n2 = valueNoise(nx + 17.2, ny + 9.1, 6);
+      const offset = (y * size + x) * 4;
+      data[offset] = Math.max(0, Math.min(255, n * 255));
+      data[offset + 1] = Math.max(0, Math.min(255, n2 * 255));
+      data[offset + 2] = data[offset]!;
+      data[offset + 3] = 255;
+    }
   }
   const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   texture.wrapS = THREE.RepeatWrapping;
@@ -63,14 +97,66 @@ function createNoiseTexture() {
   return texture;
 }
 
+function makeFallbackTex() {
+  const texture = new THREE.DataTexture(new Uint8Array([6, 8, 16, 255]), 1, 1, THREE.RGBAFormat);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function loadSky(url: string, target: { value: THREE.Texture }) {
+  const loader = new THREE.TextureLoader();
+  loader.load(url, (texture) => {
+    texture.colorSpace = THREE.NoColorSpace;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    target.value = texture;
+  });
+}
+
+function stars(count: number, seed: number, spread: number, material: THREE.MeshBasicMaterial) {
+  const geometry = new THREE.PlaneGeometry(1, 1);
+  const mesh = new THREE.InstancedMesh(geometry, material, count);
+  mesh.frustumCulled = false;
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const c = new THREE.Color();
+  const p = new THREE.Vector3();
+  const s = new THREE.Vector3();
+  let rng = seed >>> 0;
+  const rnd = () => ((rng = (rng * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let i = 0; i < count; i++) {
+    const mag = Math.pow(rnd(), 2.85);
+    const r = Math.pow(rnd(), 0.55) * spread + 0.35;
+    const a = rnd() * Math.PI * 2;
+    p.set(Math.cos(a) * r, Math.sin(a) * r * (0.4 + rnd() * 0.52), 0);
+    const size = 0.018 + mag * 0.125;
+    s.set(size, size, size);
+    m.compose(p, q, s);
+    mesh.setMatrixAt(i, m);
+    const t = rnd();
+    if (t < 0.1) c.setRGB(1.0, 0.74, 0.48);
+    else if (t < 0.42) c.setRGB(0.7, 0.82, 1.0);
+    else c.setRGB(0.94, 0.96, 1.0);
+    c.multiplyScalar(0.65 + mag * 1.85);
+    mesh.setColorAt(i, c);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  return mesh;
+}
+
 export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks): GalaxyEngine {
   const mobile = coarse();
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
   let reduced = motionPreference.matches;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
-  renderer.setClearColor(0x07060c);
+  renderer.setClearColor(0x03040a);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
 
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -10, 10);
@@ -83,22 +169,47 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
     colors[i]!.set(b.color[0], b.color[1], b.color[2]);
   });
   const noiseTexture = createNoiseTexture();
+  const skyFallback = makeFallbackTex();
+  const skyTex = { value: skyFallback };
+  const milkyTex = { value: skyFallback };
+  loadSky("/textures/starfield.jpg", skyTex);
+  loadSky("/textures/milky-way.jpg", milkyTex);
   const uniforms = {
     uRes: { value: new THREE.Vector2() }, uTime: { value: 0 }, uCam: { value: new THREE.Vector2() },
     uZoom: { value: 0.32 }, uBh: { value: new THREE.Vector2() }, uHorizon: { value: 1 },
-    uSteps: { value: mobile ? 34 : 52 }, uReduced: { value: reduced ? 1 : 0 }, uPulse: { value: 0 },
+    uSteps: { value: mobile ? 40 : 64 }, uReduced: { value: reduced ? 1 : 0 }, uPulse: { value: 0 },
     uN: { value: LIGHTS.length }, uHover: { value: -1 }, uSel: { value: -1 },
     uBodies: { value: bodies }, uBodyCol: { value: colors }, uNoise: { value: noiseTexture },
+    uSky: skyTex, uMilky: milkyTex,
   };
-  const shader = new THREE.ShaderMaterial({ vertexShader: SCENE_VS, fragmentShader: SCENE_FS, uniforms, depthWrite: false, depthTest: false });
+  const shader = new THREE.ShaderMaterial({
+    vertexShader: SCENE_VS,
+    fragmentShader: SCENE_FS,
+    uniforms,
+    depthWrite: false,
+    depthTest: false,
+    toneMapped: false,
+  });
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), shader);
   scene.add(plane);
 
   const root = new THREE.Group();
   scene.add(root);
-  const total = mobile ? 1500 : 3200;
+  const starSprite = makeStarSprite();
+  const starMat = new THREE.MeshBasicMaterial({
+    map: starSprite,
+    color: 0xffffff,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    vertexColors: true,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+  const total = mobile ? 1200 : 2600;
   const n = Math.floor(total / 3);
-  const layers = [stars(n, 11, 12), stars(n, 31, 9), stars(total - n * 2, 71, 6.5)];
+  const layers = [stars(n, 11, 12, starMat), stars(n, 31, 9, starMat), stars(total - n * 2, 71, 6.5, starMat)];
   layers.forEach((layer, i) => { layer.renderOrder = i + 2; root.add(layer); });
   hooks.onProgress?.(0, total);
   hooks.onProgress?.(Math.floor(total / 3), total);
@@ -107,8 +218,8 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloomStrength = mobile ? 0.5 : 0.65;
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), reduced ? 0 : bloomStrength, mobile ? 0.28 : 0.34, 0.88);
+  const bloomStrength = mobile ? 0.54 : 0.72;
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), reduced ? 0 : bloomStrength, mobile ? 0.34 : 0.44, 0.55);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -241,7 +352,7 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
       if (starsVisible > minimumStars) {
         layers.forEach((layer) => { layer.count = Math.max(80, Math.floor(layer.count * 0.78)); });
       } else {
-        uniforms.uSteps.value = Math.max(mobile ? 24 : 38, uniforms.uSteps.value - 8);
+        uniforms.uSteps.value = Math.max(mobile ? 28 : 44, uniforms.uSteps.value - 8);
       }
       slowFrames = 0;
     }
@@ -300,14 +411,37 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   const ro = new ResizeObserver(resize); ro.observe(canvas); resize(); raf = requestAnimationFrame(loop);
 
   return {
-    destroy() { running = false; cancelAnimationFrame(raf); ro.disconnect(); motionPreference.removeEventListener("change", onMotionChange); canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", cancel); canvas.removeEventListener("wheel", wheel); window.removeEventListener("keydown", key); layers.forEach((x) => { x.geometry.dispose(); (x.material as THREE.Material).dispose(); }); plane.geometry.dispose(); shader.dispose(); noiseTexture.dispose(); bloom.dispose(); composer.dispose(); renderer.dispose(); renderer.forceContextLoss(); },
-          recenter,
-          focus(id) { const b = BODIES.find((x) => x.id === id); if (b) chooseBody(b); },
-          closeFocus() { stopTour(); clearSelection(true); },
-          setHover,
-          setMuted() {},
-          select(id) { selected = id; },
-          toggleTour, stopTour,
-        };
-      }
-                                                                                                      
+    destroy() {
+      running = false;
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      motionPreference.removeEventListener("change", onMotionChange);
+      canvas.removeEventListener("pointerdown", down);
+      canvas.removeEventListener("pointermove", move);
+      canvas.removeEventListener("pointerup", up);
+      canvas.removeEventListener("pointercancel", cancel);
+      canvas.removeEventListener("wheel", wheel);
+      window.removeEventListener("keydown", key);
+      layers.forEach((x) => x.geometry.dispose());
+      starMat.dispose();
+      starSprite.dispose();
+      plane.geometry.dispose();
+      shader.dispose();
+      noiseTexture.dispose();
+      skyFallback.dispose();
+      if (skyTex.value !== skyFallback) skyTex.value.dispose();
+      if (milkyTex.value !== skyFallback) milkyTex.value.dispose();
+      bloom.dispose();
+      composer.dispose();
+      renderer.dispose();
+      renderer.forceContextLoss();
+    },
+    recenter,
+    focus(id) { const b = BODIES.find((x) => x.id === id); if (b) chooseBody(b); },
+    closeFocus() { stopTour(); clearSelection(true); },
+    setHover,
+    setMuted() {},
+    select(id) { selected = id; },
+    toggleTour, stopTour,
+  };
+}
