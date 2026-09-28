@@ -96,7 +96,7 @@ export const BODIES: CelestialBody[] = [
     size: 1.05,
     color: [0.95, 0.72, 0.55],
     blurb:
-      "Dois trilhões de sóis, a 2,5 milhões de anos-luz. Em quatro bilhões de anos ela e a Via Láctea se atravessam — não uma colisão, uma dança lenta.",
+      "Dois trilhões de sóis, a 2,5 milhões de anos-luz. Andrômeda e a Via Láctea vão se fundir daqui a alguns bilhões de anos — um abraço lento de galáxias.",
     toneHz: 52,
   },
   {
@@ -107,7 +107,7 @@ export const BODIES: CelestialBody[] = [
     x: b0.x,
     y: b0.y,
     size: 0.78,
-    color: [1.0, 0.55, 0.38],
+    color: [0.6, 0.85, 0.95],
     blurb:
       "O eco de uma estrela que explodiu em 1054. No centro, um pulsar gira 30 vezes por segundo e varre o gás com um farol de partículas.",
     toneHz: 64,
@@ -183,4 +183,22 @@ export const BH_WORLD_RS = 0.065;
 
 export function bodyById(id: string): CelestialBody | undefined {
   return BODIES.find((b) => b.id === id);
+}
+
+/**
+ * Forma desenhada pelo shader para cada corpo:
+ * 0 estrela · 1 nebulosa · 2 galáxia · 3 estação · 4 nebulosa em anel (Hélix)
+ */
+export function bodyShape(b: CelestialBody): number {
+  if (b.id === "helix") return 4;
+  switch (b.kind) {
+    case "nebula":
+      return 1;
+    case "galaxy":
+      return 2;
+    case "station":
+      return 3;
+    default:
+      return 0;
+  }
 }
