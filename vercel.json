@@ -1,3 +1,5 @@
 {
-  "installCommand": "npm ci --include=dev --no-audit --no-fund"
+  "installCommand": "npm ci --include=dev --no-audit --no-fund",
+  "cleanUrls": true,
+  "trailingSlash": false
 }
