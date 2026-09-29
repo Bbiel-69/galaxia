@@ -98,7 +98,7 @@ function createNoiseTexture() {
 }
 
 function makeFallbackTex() {
-  const texture = new THREE.DataTexture(new Uint8Array([6,.8, 16, 255]), 1, 1, THREE.RGBAFormat);
+  const texture = new THREE.DataTexture(new Uint8Array([6, 8, 16, 255]), 1, 1, THREE.RGBAFormat);
   texture.needsUpdate = true;
   return texture;
 }
