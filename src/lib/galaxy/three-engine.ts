@@ -3,7 +3,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { BH_WORLD_RS, BODIES, TOUR_ORDER, type CelestialBody } from "./bodies";
+import { BH_WORLD_RS, BODIES, TOUR_ORDER, bodyShape, type CelestialBody } from "./bodies";
 import type { EngineHooks, GalaxyEngine } from "./engine";
 import { SCENE_FS, SCENE_VS } from "./shaders";
 
@@ -98,7 +98,7 @@ function createNoiseTexture() {
 }
 
 function makeFallbackTex() {
-  const texture = new THREE.DataTexture(new Uint8Array([6, 8, 16, 255]), 1, 1, THREE.RGBAFormat);
+  const texture = new THREE.DataTexture(new Uint8Array([6,.8, 16, 255]), 1, 1, THREE.RGBAFormat);
   texture.needsUpdate = true;
   return texture;
 }
@@ -162,10 +162,10 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -10, 10);
   camera.position.z = 1;
 
-  const bodies = Array.from({ length: 8 }, () => new THREE.Vector4());
-  const colors = Array.from({ length: 8 }, () => new THREE.Vector3());
+  const bodies = Array.from({ length: 12 }, () => new THREE.Vector4());
+  const colors = Array.from({ length: 12 }, () => new THREE.Vector3());
   LIGHTS.forEach((b, i) => {
-    bodies[i]!.set(b.x, b.y, b.size, (i * 0.173 + 0.37) % 1);
+    bodies[i]!.set(b.x, b.y, b.size, bodyShape(b) + ((i * 0.173 + 0.37) % 1) * 0.001);
     colors[i]!.set(b.color[0], b.color[1], b.color[2]);
   });
   const noiseTexture = createNoiseTexture();
@@ -422,26 +422,24 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
       canvas.removeEventListener("pointercancel", cancel);
       canvas.removeEventListener("wheel", wheel);
       window.removeEventListener("keydown", key);
-      layers.forEach((x) => x.geometry.dispose());
+      layers.forEach((layer) => { layer.geometry.dispose(); });
       starMat.dispose();
       starSprite.dispose();
-      plane.geometry.dispose();
-      shader.dispose();
       noiseTexture.dispose();
       skyFallback.dispose();
-      if (skyTex.value !== skyFallback) skyTex.value.dispose();
-      if (milkyTex.value !== skyFallback) milkyTex.value.dispose();
-      bloom.dispose();
+      shader.dispose();
+      plane.geometry.dispose();
       composer.dispose();
       renderer.dispose();
-      renderer.forceContextLoss();
     },
+    select(id) {
+      const b = BODIES.find((x) => x.id === id);
+      if (b) chooseBody(b);
+      else clearSelection();
+    },
+    clearSelection: () => clearSelection(true),
     recenter,
-    focus(id) { const b = BODIES.find((x) => x.id === id); if (b) chooseBody(b); },
-    closeFocus() { stopTour(); clearSelection(true); },
-    setHover,
-    setMuted() {},
-    select(id) { selected = id; },
-    toggleTour, stopTour,
+    toggleTour,
+    getTouring: () => tour,
   };
 }
