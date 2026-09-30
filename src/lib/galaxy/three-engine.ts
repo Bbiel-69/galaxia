@@ -182,7 +182,9 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
     uBodies: { value: bodies }, uBodyCol: { value: colors }, uNoise: { value: noiseTexture },
     uSky: skyTex, uMilky: milkyTex,
   };
-  const shader = new THREE.ShaderMaterial({
+  // RawShaderMaterial: does not inject uniforms/attributes before the shader source,
+  // so #version 300 es remains the first line (required by WebGL ES 3.00).
+  const shader = new THREE.RawShaderMaterial({
     vertexShader: SCENE_VS,
     fragmentShader: SCENE_FS,
     uniforms,
@@ -422,24 +424,39 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
       canvas.removeEventListener("pointercancel", cancel);
       canvas.removeEventListener("wheel", wheel);
       window.removeEventListener("keydown", key);
-      layers.forEach((layer) => { layer.geometry.dispose(); });
+      layers.forEach((layer) => {
+        layer.geometry.dispose();
+        // material is shared
+      });
       starMat.dispose();
       starSprite.dispose();
       noiseTexture.dispose();
       skyFallback.dispose();
+      if (skyTex.value !== skyFallback) skyTex.value.dispose();
+      if (milkyTex.value !== skyFallback) milkyTex.value.dispose();
       shader.dispose();
       plane.geometry.dispose();
       composer.dispose();
       renderer.dispose();
     },
-    select(id) {
-      const b = BODIES.find((x) => x.id === id);
-      if (b) chooseBody(b);
-      else clearSelection();
-    },
-    clearSelection: () => clearSelection(true),
     recenter,
+    closeFocus: () => clearSelection(true),
+    setHover,
+    focus(id: string) {
+      const b = BODIES.find((x) => x.id === id);
+      if (!b) return;
+      chooseBody(b);
+    },
+    setMuted() {},
+    select(id: string | null) {
+      selected = id;
+      if (id == null) clearSelection();
+      else {
+        const b = BODIES.find((x) => x.id === id);
+        if (b) focusBody(b);
+      }
+    },
     toggleTour,
-    getTouring: () => tour,
+    stopTour,
   };
 }
