@@ -15,7 +15,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Uma galáxia viva para explorar. Arraste o céu, clique nos pontos de luz e aproxime-se do horizonte de eventos.",
+          "Uma galáxia viva para explorar. Arraste o céu e aproxime-se do horizonte de eventos.",
       },
     ],
     links: [
