@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ExternalLink, LocateFixed, Route, Volume2, VolumeX, X } from "lucide-react";
+import { ExternalLink, LocateFixed, Volume2, VolumeX, X } from "lucide-react";
 import { createAmbience, type Ambience } from "@/lib/galaxy/audio";
-import { BODIES, bodyById, type BodyKind, type CelestialBody } from "@/lib/galaxy/bodies";
+import { bodyById, type CelestialBody } from "@/lib/galaxy/bodies";
 import { createGalaxyEngine, type GalaxyEngine } from "@/lib/galaxy/three-engine";
 import { createFallbackEngine } from "@/lib/galaxy/fallback";
 
-const KIND_LABEL: Record<BodyKind, string> = { "black-hole": "Singularidade", star: "Estrela", nebula: "Nebulosa", galaxy: "Galáxia", station: "Estação" };
 const MUTE_KEY = "horizonte-muted";
 
 function canUseWebgl2(): boolean {
@@ -177,7 +176,29 @@ export function GalaxyExperience() {
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-bg text-fg">
+      {/* Video background — continuous loop, no controls */}
+      <video
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+        src="/video/milky-way.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        aria-hidden
+      />
+
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" aria-label="Galáxia interativa" />
+
+      {/* Visual boundary frame */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[15] rounded-[1.25rem] sm:rounded-[1.75rem]"
+        style={{
+          boxShadow: "inset 0 0 0 1px rgba(242,239,232,0.12), inset 0 0 80px rgba(0,0,0,0.45)",
+          margin: "max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right)) max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left))",
+        }}
+        aria-hidden
+      />
 
       <div ref={cursorRef} className="pointer-events-none fixed inset-0 z-[80] opacity-0" aria-hidden>
         {Array.from({ length: 6 }, (_, i) => (
@@ -186,32 +207,23 @@ export function GalaxyExperience() {
         <span className="fixed left-0 top-0 font-sans text-[16px] text-accent" style={{ transform: "translate(-50%,-58%)" }}>✦</span>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 opacity-[0.07] mix-blend-overlay" style={{ backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.9'/></svg>)\"" }} aria-hidden />
-
-      {BODIES.filter((b) => b.kind !== "black-hole").map((body) => (
-        <button key={body.id} type="button" ref={(node) => { if (node) labelRefs.current.set(body.id, node); else labelRefs.current.delete(body.id); }} onPointerEnter={() => engineRef.current?.setHover(body.id)} onPointerLeave={() => engineRef.current?.setHover(null)} onClick={() => engineRef.current?.focus(body.id)} title={body.name} className="absolute top-0 left-0 z-10 min-h-11 px-2 text-center will-change-transform" style={{ opacity: 0, pointerEvents: "none" }}>
-          <span className="inline-flex items-center gap-1 font-sans text-[11px] font-medium tracking-[0.18em] text-accent uppercase">{body.name}{body.href ? <ExternalLink className="size-3 opacity-70" aria-hidden /> : null}</span>
-        </button>
-      ))}
+      <div className="pointer-events-none absolute inset-0 opacity-[0.05] mix-blend-overlay" style={{ backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.9'/></svg>)\"" }} aria-hidden />
 
       <header className="pointer-events-none absolute top-0 left-0 z-20 flex w-full items-start justify-between gap-4 p-4 pt-[max(1rem,env(safe-area-inset-top))] sm:p-6">
         <div className="max-w-[16rem]"><p className="font-sans text-[11px] font-medium tracking-[0.28em] text-muted uppercase">Observatório</p><h1 className="font-display text-[2.15rem] leading-[0.95] tracking-[-0.03em] text-fg sm:text-4xl">Horizonte</h1></div>
         <div className="pointer-events-auto flex items-center gap-2">
-          <IconBtn label={tourActive ? "Parar tour" : "Iniciar tour"} onClick={tourActive ? stopTour : toggleTour}><Route className={tourActive ? "size-4 animate-pulse" : "size-4"} /></IconBtn>
           <IconBtn label={muted ? "Ativar som" : "Silenciar"} onClick={toggleMute}>{muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}</IconBtn>
           <IconBtn label="Voltar ao centro" onClick={goHome}><LocateFixed className="size-4" /></IconBtn>
         </div>
       </header>
 
-      {!ready ? <div className="absolute inset-0 z-40 grid place-items-center bg-bg/80 backdrop-blur-sm"><div className="w-[min(78vw,20rem)]"><div className="mb-3 flex justify-between font-sans text-xs tracking-[0.18em] text-muted uppercase"><span>Gerando galáxia</span><span>{progress}%</span></div><div className="h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${progress}%` }} /></div><p className="mt-2 text-center font-sans text-[10px] tracking-[0.16em] text-muted uppercase">{progress < 100 ? "Preparando estrelas" : "Pronta"}</p></div></div> : null}
+      {!ready ? <div className="absolute inset-0 z-40 grid place-items-center bg-bg/80 backdrop-blur-sm"><div className="w-[min(78vw,20rem)]"><div className="mb-3 flex justify-between font-sans text-xs tracking-[0.18em] text-muted uppercase"><span>Carregando horizonte</span><span>{progress}%</span></div><div className="h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-accent transition-[width] duration-300 ease-out" style={{ width: `${progress}%` }} /></div><p className="mt-2 text-center font-sans text-[10px] tracking-[0.16em] text-muted uppercase">{progress < 100 ? "Preparando" : "Pronto"}</p></div></div> : null}
 
       {ready && unavailable ? <div className="absolute inset-0 z-40 grid place-items-center bg-bg px-6 text-center"><div className="max-w-xs"><p className="font-sans text-[10px] tracking-[0.26em] text-muted uppercase">Observatório</p><h2 className="mt-1 font-display text-2xl leading-tight text-fg">Não foi possível carregar a galáxia</h2><p className="mt-3 font-sans text-sm leading-relaxed text-muted">O navegador bloqueou a renderização (comum em modo de economia de bateria). Tente recarregar a página ou desativar a economia de bateria.</p></div></div> : null}
 
-      {tourActive && tourBody ? <aside className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-30 w-[min(calc(100vw-2rem),30rem)] -translate-x-1/2 rounded-xl border border-border bg-surface/88 p-4 text-center shadow-[0_18px_50px_rgb(0_0_0/0.45)] backdrop-blur-md"><p className="font-sans text-[10px] tracking-[0.26em] text-muted uppercase">Tour · {KIND_LABEL[tourBody.kind]}</p><h2 className="mt-1 font-display text-3xl leading-none">{tourBody.name}</h2><p className="mt-1 font-sans text-sm text-muted">{tourBody.subtitle}</p><p className="mt-2 font-sans text-sm leading-relaxed text-fg/80">{tourBody.blurb}</p></aside> : null}
+      {hint ? <p className="pointer-events-none absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-20 w-[min(92vw,28rem)] -translate-x-1/2 text-center font-sans text-xs tracking-[0.18em] text-muted uppercase">arraste para explorar · role para aproximar · clique no horizonte</p> : null}
 
-      {hint ? <p className="pointer-events-none absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-20 w-[min(92vw,28rem)] -translate-x-1/2 text-center font-sans text-xs tracking-[0.18em] text-muted uppercase">arraste para explorar · clique nos pontos de luz · tour percorre os objetos</p> : null}
-
-      {selected && !tourActive ? <aside className="absolute right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 w-[min(calc(100vw-2rem),22.5rem)] animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-white/15 bg-surface/75 p-4 shadow-[0_18px_50px_rgb(0_0_0/0.45),0_0_44px_-16px_rgba(255,170,110,0.35)] backdrop-blur-xl duration-300 sm:right-6 sm:bottom-6" role="dialog" aria-labelledby="body-title">
+      {selected && !tourActive ? <aside className="absolute right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 w-[min(calc(100vw-2rem),22.5rem)] animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-white/15 bg-surface/75 p-4 shadow-[0_18px_50px_rgb(0_0_0/0.45),0_0_44px_-16px_rgba(255,170,110,0.35)] backdrop-blur-xl duration-500 ease-out sm:right-6 sm:bottom-6" role="dialog" aria-labelledby="body-title">
         <div className="flex items-center justify-between gap-3">
           <h2 id="body-title" className="font-display text-2xl leading-none">{selected.name}</h2>
           <IconBtn label="Fechar" onClick={closePanel}><X className="size-4" /></IconBtn>

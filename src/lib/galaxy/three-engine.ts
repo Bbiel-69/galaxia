@@ -3,7 +3,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { BH_WORLD_RS, BODIES, TOUR_ORDER, bodyShape, type CelestialBody } from "./bodies";
+import { BH_WORLD_RS, BODIES, TOUR_ORDER, WORLD_BOUND, bodyShape, type CelestialBody } from "./bodies";
 import type { EngineHooks, GalaxyEngine } from "./engine";
 import { SCENE_FS, SCENE_VS } from "./shaders";
 
@@ -11,7 +11,7 @@ export type { GalaxyEngine } from "./engine";
 
 const LIGHTS = BODIES.filter((b) => b.kind !== "black-hole");
 const TOUR_MS = 4800;
-const FOCUS_MS = 1250;
+const FOCUS_MS = 1600;
 
 function coarse() {
   return typeof window !== "undefined" && (matchMedia("(pointer: coarse)").matches || innerWidth < 720);
@@ -152,8 +152,8 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   const mobile = coarse();
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
   let reduced = motionPreference.matches;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
-  renderer.setClearColor(0x03040a);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", alpha: true, premultipliedAlpha: false });
+  renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.12;
@@ -194,6 +194,7 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
     depthWrite: false,
     depthTest: false,
     toneMapped: false,
+    transparent: true,
   });
   // 3 vertices only - SCENE_VS builds a fullscreen triangle from gl_VertexID 0..2
   const fsGeo = new THREE.BufferGeometry();
@@ -206,26 +207,10 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
 
   const root = new THREE.Group();
   scene.add(root);
-  const starSprite = makeStarSprite();
-  const starMat = new THREE.MeshBasicMaterial({
-    map: starSprite,
-    color: 0xffffff,
-    transparent: true,
-    depthWrite: false,
-    depthTest: false,
-    blending: THREE.AdditiveBlending,
-    vertexColors: true,
-    toneMapped: false,
-    side: THREE.DoubleSide,
-  });
-  const total = mobile ? 1200 : 2600;
-  const n = Math.floor(total / 3);
-  const layers = [stars(n, 11, 12, starMat), stars(n, 31, 9, starMat), stars(total - n * 2, 71, 6.5, starMat)];
-  layers.forEach((layer, i) => { layer.renderOrder = i + 2; root.add(layer); });
-  hooks.onProgress?.(0, total);
-  hooks.onProgress?.(Math.floor(total / 3), total);
-  hooks.onProgress?.(Math.floor((total * 2) / 3), total);
-  hooks.onProgress?.(total, total);
+  // Celestial body particles / starfield layers removed — video background + black hole only.
+  const layers: THREE.InstancedMesh[] = [];
+  hooks.onProgress?.(0, 1);
+  hooks.onProgress?.(1, 1);
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
@@ -234,7 +219,7 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
-  let camX = 0, camY = 0, zoom = 0.32, tx = 0, ty = 0, tz = 0.32;
+  let camX = 0, camY = 0, zoom = 0.22, tx = 0, ty = 0, tz = 0.22;
   let transition: { id: string | null; fromX: number; fromY: number; fromZoom: number; toX: number; toY: number; toZoom: number; started: number } | null = null;
   let returnView: { x: number; y: number; zoom: number } | null = null;
   let focusId: string | null = null;
@@ -243,10 +228,16 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   let lastX = 0, lastY = 0, lastMoveTime = 0, velocityX = 0, velocityY = 0;
   let last = performance.now(), raf = 0, pulse = 0, flare = 7;
   let tour = false, tourIndex = -1, tourElapsed = TOUR_MS;
-  let slowFrames = 0;
-
   const size = () => ({ w: canvas.clientWidth || 1, h: canvas.clientHeight || 1 });
-  const homeZoom = () => { const { w, h } = size(); return Math.min(0.48, Math.max(0.16, Math.min(w, h) * 0.21 / (11 * BH_WORLD_RS * h))); };
+  const homeZoom = () => { const { w, h } = size(); return Math.min(0.38, Math.max(0.12, Math.min(w, h) * 0.28 / (11 * BH_WORLD_RS * h))); };
+  const clampCam = (x: number, y: number, z: number) => {
+    const bound = WORLD_BOUND * Math.max(0.55, Math.min(1.15, 0.85 / Math.max(z, 0.12)));
+    return {
+      x: Math.max(-bound, Math.min(bound, x)),
+      y: Math.max(-bound, Math.min(bound, y)),
+      z: Math.min(2.8, Math.max(0.12, z)),
+    };
+  };
   const worldToCss = (x: number, y: number) => { const { w, h } = size(); return { x: (x - camX) * h * zoom + w / 2, y: -(y - camY) * h * zoom + h / 2 }; };
   const screenToWorld = (x: number, y: number) => { const { w, h } = size(); return { x: (x - w / 2) / (h * zoom) + camX, y: -(y - h / 2) / (h * zoom) + camY }; };
   const hit = (x: number, y: number) => {
@@ -273,7 +264,9 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   const focusBody = (b: CelestialBody) => {
     if (focusId == null && !returnView) returnView = { x: camX, y: camY, zoom };
     focusId = b.id;
-    animateCamera(b.id, b.x, b.y, b.kind === "black-hole" ? 1.85 : 1.35);
+    const targetZ = b.kind === "black-hole" ? 1.15 : 1.35;
+    const clamped = clampCam(b.x, b.y, targetZ);
+    animateCamera(b.id, clamped.x, clamped.y, clamped.z);
   };
   const chooseBody = (b: CelestialBody) => {
     selected = b.id;
@@ -335,7 +328,8 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
     }
     if (transition) {
       const t = Math.min(1, (now - transition.started) / FOCUS_MS);
-      const eased = t * t * (3 - 2 * t);
+      // Smoother quintic ease-in-out for fluid section transitions
+      const eased = t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
       camX = transition.fromX + (transition.toX - transition.fromX) * eased;
       camY = transition.fromY + (transition.toY - transition.fromY) * eased;
       zoom = transition.fromZoom + (transition.toZoom - transition.fromZoom) * eased;
@@ -345,28 +339,21 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
         if (completed) hooks.onFocusComplete?.(completed);
       }
     } else if (follow) {
-      camX = lerp(camX, tx, tour ? 1.8 : 3.2, dt); camY = lerp(camY, ty, tour ? 1.8 : 3.2, dt); zoom = lerp(zoom, tz, tour ? 1.7 : 2.6, dt);
+      camX = lerp(camX, tx, tour ? 2.2 : 4.0, dt); camY = lerp(camY, ty, tour ? 2.2 : 4.0, dt); zoom = lerp(zoom, tz, tour ? 2.0 : 3.2, dt);
     } else if (!dragging && (Math.abs(velocityX) + Math.abs(velocityY) > 0.0001)) {
       camX += velocityX * dt; camY += velocityY * dt;
-      velocityX *= Math.exp(-4.8 * dt); velocityY *= Math.exp(-4.8 * dt);
+      velocityX *= Math.exp(-5.6 * dt); velocityY *= Math.exp(-5.6 * dt);
+    }
+    {
+      const c = clampCam(camX, camY, zoom);
+      camX = c.x; camY = c.y; zoom = c.z;
+      if (!transition) { tx = camX; ty = camY; tz = zoom; }
     }
     const { w, h } = size();
     camera.left = -w / h / (2 * zoom) + camX; camera.right = w / h / (2 * zoom) + camX; camera.top = 1 / (2 * zoom) + camY; camera.bottom = -1 / (2 * zoom) + camY; camera.updateProjectionMatrix();
     uniforms.uTime.value = reduced ? 0 : now * 0.001; uniforms.uCam.value.set(camX, camY); uniforms.uZoom.value = zoom; uniforms.uHorizon.value = BH_WORLD_RS * zoom * h * renderer.getPixelRatio(); uniforms.uPulse.value = pulse;
     uniforms.uHover.value = hover ? LIGHTS.findIndex((b) => b.id === hover) : -1; uniforms.uSel.value = selected ? LIGHTS.findIndex((b) => b.id === selected) : -1;
-    layers.forEach((layer, i) => { const p = reduced ? 0 : [0.08, 0.17, 0.29][i]!; layer.position.set(-camX * p, -camY * p, 0); });
     labels(); composer.render();
-    const ms = dt * 1000; slowFrames = ms > 20 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
-    if (slowFrames > 18 && !reduced) {
-      const starsVisible = layers.reduce((sum, layer) => sum + layer.count, 0);
-      const minimumStars = mobile ? 480 : 900;
-      if (starsVisible > minimumStars) {
-        layers.forEach((layer) => { layer.count = Math.max(80, Math.floor(layer.count * 0.78)); });
-      } else {
-        uniforms.uSteps.value = Math.max(mobile ? 28 : 44, uniforms.uSteps.value - 8);
-      }
-      slowFrames = 0;
-    }
     raf = requestAnimationFrame(loop);
   };
   const down = (e: PointerEvent) => {
@@ -383,7 +370,8 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
       const elapsed = Math.max(0.008, (e.timeStamp - lastMoveTime) / 1000);
       moved ||= Math.hypot(dx, dy) > 3;
       const moveX = -dx / (h * zoom), moveY = dy / (h * zoom);
-      camX += moveX; camY += moveY; tx = camX; ty = camY;
+      const next = clampCam(camX + moveX, camY + moveY, zoom);
+      camX = next.x; camY = next.y; tx = camX; ty = camY;
       velocityX = velocityX * 0.35 + (moveX / elapsed) * 0.65;
       velocityY = velocityY * 0.35 + (moveY / elapsed) * 0.65;
       lastX = e.clientX; lastY = e.clientY; lastMoveTime = e.timeStamp; return;
@@ -403,9 +391,11 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
     e.preventDefault(); stopTour(); transition = null; velocityX = 0; velocityY = 0;
     const r = canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
     const before = screenToWorld(x, y), { w, h } = size();
-    tz = Math.min(3.6, Math.max(0.18, zoom * Math.exp(-e.deltaY * 0.0015)));
-    tx = before.x - (x - w / 2) / (h * tz);
-    ty = before.y + (y - h / 2) / (h * tz);
+    const nextZ = Math.min(2.8, Math.max(0.12, zoom * Math.exp(-e.deltaY * 0.0012)));
+    const nextX = before.x - (x - w / 2) / (h * nextZ);
+    const nextY = before.y + (y - h / 2) / (h * nextZ);
+    const c = clampCam(nextX, nextY, nextZ);
+    tz = c.z; tx = c.x; ty = c.y;
     follow = true;
   };
   const key = (e: KeyboardEvent) => { if (e.key === "Escape") { stopTour(); clearSelection(true); } else if (e.key === "Home" || e.key === "0") recenter(); };
@@ -436,8 +426,6 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
       layers.forEach((layer) => {
         layer.geometry.dispose();
       });
-      starMat.dispose();
-      starSprite.dispose();
       noiseTexture.dispose();
       skyFallback.dispose();
       if (skyTex.value !== skyFallback) skyTex.value.dispose();

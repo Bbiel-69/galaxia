@@ -173,33 +173,13 @@ void main() {
   float t = uTime;
   float pulse = 1.0 + 0.055 * sin(t * TAU / 8.3) + uPulse * 0.35;
 
-  vec3 col = vec3(0.0045, 0.0055, 0.012);
+  /* Transparent base so the video background shows through. */
+  vec3 col = vec3(0.0);
+  float alpha = 0.0;
 
-  vec2 skyUv = (world - uCam * 0.05) * 0.045 + 0.5;
-  col += sampleTex(uSky, skyUv) * vec3(0.5, 0.56, 0.72) * 0.55;
-  vec2 milkyUv = (world - uCam * 0.085) * 0.028 + 0.5;
-  vec3 milky = sampleTex(uMilky, milkyUv);
-
-  float angC = atan(rel.y, rel.x);
-  float spiral = 0.5 + 0.5 * sin(angC * 2.0 - log(max(rW, 1e-4)) * 3.2 + t * 0.012);
-  spiral = smoothstep(0.15, 0.95, spiral);
-  float armMask = exp(-max(rW - Rs * 14.0, 0.0) * 0.16);
-
-  float breathe = 1.0 + 0.08 * sin(t * 0.21);
-  vec2 nuv = world * 0.075 + vec2(t * 0.0016, -t * 0.0012);
-  float f1 = fbm(nuv);
-  float f2 = fbm(nuv * 2.4 + 7.31);
-  float neb = smoothstep(0.46, 0.92, f1 * 0.7 + f2 * 0.45) * breathe;
-  neb *= (0.35 + 0.65 * spiral) * (0.25 + 0.75 * armMask);
-  vec3 nebCol = mix(vec3(0.13, 0.2, 0.42), vec3(0.34, 0.16, 0.4), smoothstep(0.3, 0.7, f2));
-  nebCol = mix(nebCol, vec3(0.5, 0.26, 0.3), smoothstep(0.55, 0.9, f1) * 0.55);
-  col += nebCol * neb * 0.34;
-  col += milky * (0.22 + armMask * 0.75) * vec3(0.55, 0.56, 0.66);
-
-  col += vec3(0.5, 0.34, 0.3) * exp(-max(rW - Rs, 0.0) * 2.2) * 0.05 * pulse;
-
-  col += starLayer(world - uCam * 0.03, 26.0, 0.992, t, 0.0) * 0.75;
-  col += starLayer(world * 1.7 - uCam * 0.06, 44.0, 0.988, t, 0.0) * 0.5;
+  /* Optional very subtle residual glow near the hole (no stars / nebulae / bodies). */
+  col += vec3(0.45, 0.28, 0.22) * exp(-max(rW - Rs, 0.0) * 1.6) * 0.04 * pulse;
+  alpha = max(alpha, exp(-max(rW - Rs * 2.5, 0.0) * 0.9) * 0.15);
 
   for (int i = 0; i < 12; i++) {
     if (i >= uN) break;
@@ -219,31 +199,41 @@ void main() {
       float g2 = exp(-r * r / (sz * sz * 1.4)) * 0.32;
       float spikes = (exp(-abs(d.x) * 34.0 / sz - d.y * d.y * 60.0 / (sz * sz))
                     + exp(-abs(d.y) * 34.0 / sz - d.x * d.x * 60.0 / (sz * sz))) * 0.55;
-      col += bc * (g1 * 1.5 + g2 + spikes * g1) * twk * boost;
+      vec3 add = bc * (g1 * 1.5 + g2 + spikes * g1) * twk * boost;
+      col += add;
+      alpha = max(alpha, clamp(length(add) * 0.8, 0.0, 1.0));
     } else if (shape < 1.5) {
       float n = fbm(d * (1.6 / sz) + ph * 19.7);
       float cloud = smoothstep(0.32, 0.85, n) * exp(-r / (sz * 1.5));
       float core = exp(-r * r / (sz * sz * 0.3)) * 0.4;
-      col += bc * (cloud * 0.55 + core) * twk * boost;
+      vec3 add = bc * (cloud * 0.55 + core) * twk * boost;
+      col += add;
+      alpha = max(alpha, clamp(length(add) * 0.9, 0.0, 1.0));
     } else if (shape < 2.5) {
       float a2 = atan(d.y, d.x);
       float arms = pow(0.5 + 0.5 * sin(a2 * 2.0 + r * (9.0 / sz) + ph * 6.28), 2.4);
       float gn = fbm(vec2(r * (3.2 / sz) - t * 0.004, a2 * 0.636 + ph));
       float body = exp(-r * r / (sz * sz * 0.8));
       float core = exp(-r * r / (sz * sz * 0.09)) * 1.1;
-      col += bc * ((arms * (0.45 + gn * 0.8) + core) * body) * twk * boost;
+      vec3 add = bc * ((arms * (0.45 + gn * 0.8) + core) * body) * twk * boost;
+      col += add;
+      alpha = max(alpha, clamp(length(add) * 0.85, 0.0, 1.0));
     } else if (shape < 3.5) {
       float dot1 = exp(-r * r / (sz * sz * 0.02)) * 1.6;
       float ring = exp(-pow((r - sz * 0.42) / (sz * 0.05), 2.0)) * 0.5;
       float blink = smoothstep(0.86, 1.0, sin(t * 2.2 + ph * 9.0))
                   * exp(-r * r / (sz * sz * 0.5));
-      col += bc * (dot1 + ring + blink * 1.2) * boost;
+      vec3 add = bc * (dot1 + ring + blink * 1.2) * boost;
+      col += add;
+      alpha = max(alpha, clamp(length(add), 0.0, 1.0));
     } else {
       float ring = exp(-pow((r - sz * 0.5) / (sz * 0.17), 2.0));
       float a3 = atan(d.y, d.x);
       float wisp = 0.6 + 0.4 * texture(uNoise, vec2(a3 * 0.636 + ph, r * 0.8 / sz + t * 0.006)).r;
       float pupil = exp(-r * r / (sz * sz * 0.05)) * 0.8;
-      col += bc * (ring * wisp + pupil) * 0.8 * twk * boost;
+      vec3 add = bc * (ring * wisp + pupil) * 0.8 * twk * boost;
+      col += add;
+      alpha = max(alpha, clamp(length(add) * 0.9, 0.0, 1.0));
     }
   }
 
@@ -254,13 +244,17 @@ void main() {
 
   vec4 disk = diskSample(rd, aDisk, Rs, t) * pulse;
 
-  float halo = exp(-pow(max(rW - Rs * 1.05, 0.0) / (Rs * 1.1), 2.0));
-  col += vec3(1.0, 0.72, 0.45) * halo * 0.18 * pulse;
+  float halo = exp(-pow(max(rW - Rs * 1.05, 0.0) / (Rs * 1.35), 2.0));
+  col += vec3(1.0, 0.72, 0.45) * halo * 0.22 * pulse;
+  alpha = max(alpha, halo * 0.35);
 
   col = col * (1.0 - disk.a) + disk.rgb;
+  alpha = max(alpha, disk.a);
 
-  float shadow = 1.0 - smoothstep(Rs * 0.985, Rs * 1.015, rW);
+  /* Pure black event horizon — hard core, no glow / gradient / particles inside. */
+  float shadow = 1.0 - smoothstep(Rs * 0.92, Rs * 1.02, rW);
   col = mix(col, vec3(0.0), shadow);
+  alpha = max(alpha, shadow);
 
   float phi = atan(rel.y, rel.x);
   float rN = rW / Rs;
@@ -270,13 +264,15 @@ void main() {
               * smoothstep(0.3, 0.75, rN)
               * (0.45 + 0.55 * abs(sin(phi)));
   col += lensed.rgb * lensW * 0.85;
+  alpha = max(alpha, lensed.a * lensW * 0.6);
 
   float ring = exp(-pow((rW - Rs * 1.08) / (Rs * 0.045), 2.0));
   col += vec3(1.25, 1.15, 0.98) * ring * (0.75 + 0.25 * sin(t * 0.9)) * pulse;
+  alpha = max(alpha, ring * 0.7);
 
   vec2 q = uv * 2.0 - 1.0;
   q.x *= uRes.x / uRes.y;
-  col *= 1.0 - dot(q, q) * 0.13;
+  col *= 1.0 - dot(q, q) * 0.08;
 
   float lum = dot(col, vec3(0.299, 0.587, 0.114));
   col = mix(vec3(lum), col, 1.07);
@@ -286,7 +282,11 @@ void main() {
 
   col = pow(max(col, 0.0), vec3(0.88));
 
-  fragColor = vec4(col, 1.0);
+  /* Outside the hole influence, stay transparent so the video is fully visible. */
+  float presence = smoothstep(Rs * 18.0, Rs * 4.0, rW);
+  alpha = clamp(max(alpha, presence * 0.02), 0.0, 1.0);
+
+  fragColor = vec4(col, alpha);
 }
 `;
 

@@ -1,4 +1,4 @@
-import { BH_WORLD_RS, BODIES, type CelestialBody } from "./bodies";
+import { BH_WORLD_RS, BODIES, WORLD_BOUND, type CelestialBody } from "./bodies";
 import type { EngineHooks, GalaxyEngine, LabelPose } from "./engine";
 
 function expLerp(current: number, target: number, lambda: number, dt: number): number {
@@ -40,40 +40,10 @@ export function createFallbackEngine(
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
   let reduced = motionPreference.matches;
 
-  const stars = Array.from({ length: 420 }, (_, i) => {
-    const t = Math.random();
-    const spiral = i < 300;
-    const arm = i % 3;
-    const angle = arm * 2.094 + t * 2.55 + (Math.random() - 0.5) * (spiral ? 0.72 : 6.28);
-    const radius = spiral ? 1.15 + t * 4.6 : 1.5 + Math.random() * 7;
-    return {
-      x: spiral ? Math.cos(angle) * radius : (Math.random() - 0.5) * 14,
-      y: spiral ? Math.sin(angle) * radius * 0.72 : (Math.random() - 0.5) * 10,
-      s: Math.random() * 1.5 + 0.35,
-      a: 0.4 + Math.random() * 0.6,
-      phase: Math.random() * Math.PI * 2,
-      warm: Math.random() > 0.75,
-      flare: Math.random() > 0.965,
-    };
-  });
-
-  const nebulae = Array.from({ length: 18 }, (_, i) => {
-    const arm = i % 3;
-    const t = 0.12 + ((i * 0.618) % 1) * 0.9;
-    const angle = arm * 2.094 + t * 2.55 + (i % 2 ? 0.36 : -0.36);
-    const radius = 1.25 + t * 3.7;
-    const palette = [[135, 113, 198], [101, 151, 198], [194, 127, 132], [198, 157, 111]];
-    return {
-      x: Math.cos(angle) * radius,
-      y: Math.sin(angle) * radius * 0.72,
-      size: 0.45 + (i % 4) * 0.19,
-      alpha: 0.045 + (i % 3) * 0.012,
-      color: palette[i % palette.length]!,
-      rotation: angle,
-    };
-  });
-
-  const dust = Array.from({ length: 220 }, () => ({
+  // Stars, nebulae and dust removed — video background + black hole only.
+  const stars: { x: number; y: number; s: number; a: number; phase: number; warm: boolean; flare: boolean }[] = [];
+  const nebulae: { x: number; y: number; size: number; alpha: number; color: number[]; rotation: number }[] = [];
+  const dust: { a: number; r: number; s: number; w: number }[] = Array.from({ length: 0 }, () => ({
     a: Math.random() * Math.PI * 2,
     r: 2.4 + Math.random() * 9,
     s: 0.6 + Math.random() * 1.8,
@@ -195,8 +165,8 @@ export function createFallbackEngine(
     last = now;
     if (!reduced) diskAngle += dt * 0.35;
     if (transition) {
-      const t = Math.min(1, (now - transition.started) / 1250);
-      const eased = t * t * (3 - 2 * t);
+      const t = Math.min(1, (now - transition.started) / 1600);
+      const eased = t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
       camX = transition.fromX + (transition.toX - transition.fromX) * eased;
       camY = transition.fromY + (transition.toY - transition.fromY) * eased;
       zoom = transition.fromZoom + (transition.toZoom - transition.fromZoom) * eased;
@@ -206,20 +176,26 @@ export function createFallbackEngine(
         if (completed) hooks.onFocusComplete?.(completed);
       }
     } else if (follow) {
-      camX = expLerp(camX, tCamX, 3.2, dt);
-      camY = expLerp(camY, tCamY, 3.2, dt);
-      zoom = expLerp(zoom, tZoom, 2.6, dt);
+      camX = expLerp(camX, tCamX, 4.0, dt);
+      camY = expLerp(camY, tCamY, 4.0, dt);
+      zoom = expLerp(zoom, tZoom, 3.2, dt);
     } else if (!dragging && (Math.abs(velocityX) + Math.abs(velocityY) > 0.0001)) {
       camX += velocityX * dt; camY += velocityY * dt;
-      velocityX *= Math.exp(-4.8 * dt); velocityY *= Math.exp(-4.8 * dt);
+      velocityX *= Math.exp(-5.6 * dt); velocityY *= Math.exp(-5.6 * dt);
+    }
+    {
+      const bound = WORLD_BOUND * Math.max(0.55, Math.min(1.15, 0.85 / Math.max(zoom, 0.12)));
+      camX = Math.max(-bound, Math.min(bound, camX));
+      camY = Math.max(-bound, Math.min(bound, camY));
+      zoom = Math.min(2.8, Math.max(0.12, zoom));
+      if (!transition) { tCamX = camX; tCamY = camY; tZoom = zoom; }
     }
     resize();
     const { width } = canvas;
     const { w, h } = cssSize();
     const dpr = width / w;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "#07060c";
-    ctx.fillRect(0, 0, w, h);
+    ctx.clearRect(0, 0, w, h);
 
     const origin = worldToCss(0, 0);
     const rs = BH_WORLD_RS * h * zoom;
