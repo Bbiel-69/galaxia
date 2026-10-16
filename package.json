@@ -16,7 +16,7 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
     "@tanstack/react-router": "^1.114.25",
-    "@tanstack/react-start": "^1.114.25",
+    "@tanstack/react-start": "^1.169.2",
     "@tanstack/router-plugin": "^1.114.25",
     "better-auth": "~1.6.30",
     "jose": "6.2.9",
