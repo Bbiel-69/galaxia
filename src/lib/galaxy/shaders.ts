@@ -270,92 +270,93 @@ void main() {
   alpha = max(alpha, lensed.a * lensW * 0.55);
 
   /* ============================================================ */
-  /*  HORIZONTE DE EVENTOS — multi-aneis concêntricos estilo vídeo */
+  /*  HORIZONTE DE EVENTOS — multi-aneis GROSSOS estilo vídeo      */
   /*  O núcleo preto fica TOTALMENTE sob / dentro do anel interno   */
   /* ============================================================ */
 
   /* Núcleo 100% preto — raio um pouco menor que o anel interno */
-  float coreR = Rs * 0.92;
-  float core = 1.0 - smoothstep(coreR * 0.96, coreR, rW);
+  float coreR = Rs * 0.88;
+  float core = 1.0 - smoothstep(coreR * 0.94, coreR, rW);
   col = mix(col, vec3(0.0), core);
   alpha = max(alpha, core);
 
-  /* ---- Multi-aneis concêntricos com aberração cromática (ref. vídeo) ---- */
-  /* Anel 0 (mais interno, bem colado ao núcleo) */
-  float ring0 = exp(-pow((rW - Rs * 1.00) / (Rs * 0.028), 2.0));
-  /* Anel 1 */
-  float ring1 = exp(-pow((rW - Rs * 1.18) / (Rs * 0.038), 2.0));
-  /* Anel 2 */
-  float ring2 = exp(-pow((rW - Rs * 1.42) / (Rs * 0.048), 2.0));
-  /* Anel 3 (mais externo, mais fraco) */
-  float ring3 = exp(-pow((rW - Rs * 1.72) / (Rs * 0.065), 2.0));
-  /* Anel 4 (muito fraco) */
-  float ring4 = exp(-pow((rW - Rs * 2.15) / (Rs * 0.09), 2.0));
+  /* ---- Multi-aneis concêntricos GROSSOS com aberração cromática (ref. vídeo) ---- */
+  /* Larguras bem maiores para ficarem visíveis como no vídeo de referência */
+  float ring0 = exp(-pow((rW - Rs * 1.02) / (Rs * 0.085), 2.0));
+  float ring1 = exp(-pow((rW - Rs * 1.32) / (Rs * 0.11), 2.0));
+  float ring2 = exp(-pow((rW - Rs * 1.70) / (Rs * 0.14), 2.0));
+  float ring3 = exp(-pow((rW - Rs * 2.20) / (Rs * 0.18), 2.0));
+  float ring4 = exp(-pow((rW - Rs * 2.85) / (Rs * 0.24), 2.0));
 
-  float ringSum = ring0 * 1.35 + ring1 * 0.95 + ring2 * 0.65 + ring3 * 0.38 + ring4 * 0.18;
+  float ringSum = ring0 * 1.55 + ring1 * 1.15 + ring2 * 0.80 + ring3 * 0.48 + ring4 * 0.22;
 
-  /* Aberração cromática forte nos anéis (RGB split radial) — como no vídeo */
-  float aberrAmt = Rs * 0.055 * (0.7 + 0.3 * sin(t * 1.7 + phi * 3.0));
+  /* Aberração cromática FORTE nos anéis (RGB split radial) — como no vídeo */
+  float aberrAmt = Rs * 0.12 * (0.75 + 0.35 * sin(t * 1.4 + phi * 2.5));
   float rR = rW + aberrAmt;
   float rG = rW;
-  float rB = rW - aberrAmt * 1.15;
+  float rB = rW - aberrAmt * 1.2;
 
-  float ringR0 = exp(-pow((rR - Rs * 1.00) / (Rs * 0.028), 2.0));
-  float ringG0 = exp(-pow((rG - Rs * 1.00) / (Rs * 0.028), 2.0));
-  float ringB0 = exp(-pow((rB - Rs * 1.00) / (Rs * 0.028), 2.0));
+  float ringR0 = exp(-pow((rR - Rs * 1.02) / (Rs * 0.085), 2.0));
+  float ringG0 = exp(-pow((rG - Rs * 1.02) / (Rs * 0.085), 2.0));
+  float ringB0 = exp(-pow((rB - Rs * 1.02) / (Rs * 0.085), 2.0));
 
-  float ringR1 = exp(-pow((rR - Rs * 1.18) / (Rs * 0.038), 2.0));
-  float ringG1 = exp(-pow((rG - Rs * 1.18) / (Rs * 0.038), 2.0));
-  float ringB1 = exp(-pow((rB - Rs * 1.18) / (Rs * 0.038), 2.0));
+  float ringR1 = exp(-pow((rR - Rs * 1.32) / (Rs * 0.11), 2.0));
+  float ringG1 = exp(-pow((rG - Rs * 1.32) / (Rs * 0.11), 2.0));
+  float ringB1 = exp(-pow((rB - Rs * 1.32) / (Rs * 0.11), 2.0));
 
-  float ringR2 = exp(-pow((rR - Rs * 1.42) / (Rs * 0.048), 2.0));
-  float ringG2 = exp(-pow((rG - Rs * 1.42) / (Rs * 0.048), 2.0));
-  float ringB2 = exp(-pow((rB - Rs * 1.42) / (Rs * 0.048), 2.0));
+  float ringR2 = exp(-pow((rR - Rs * 1.70) / (Rs * 0.14), 2.0));
+  float ringG2 = exp(-pow((rG - Rs * 1.70) / (Rs * 0.14), 2.0));
+  float ringB2 = exp(-pow((rB - Rs * 1.70) / (Rs * 0.14), 2.0));
 
-  float ringR3 = exp(-pow((rR - Rs * 1.72) / (Rs * 0.065), 2.0));
-  float ringG3 = exp(-pow((rG - Rs * 1.72) / (Rs * 0.065), 2.0));
-  float ringB3 = exp(-pow((rB - Rs * 1.72) / (Rs * 0.065), 2.0));
+  float ringR3 = exp(-pow((rR - Rs * 2.20) / (Rs * 0.18), 2.0));
+  float ringG3 = exp(-pow((rG - Rs * 2.20) / (Rs * 0.18), 2.0));
+  float ringB3 = exp(-pow((rB - Rs * 2.20) / (Rs * 0.18), 2.0));
+
+  float ringR4 = exp(-pow((rR - Rs * 2.85) / (Rs * 0.24), 2.0));
+  float ringG4 = exp(-pow((rG - Rs * 2.85) / (Rs * 0.24), 2.0));
+  float ringB4 = exp(-pow((rB - Rs * 2.85) / (Rs * 0.24), 2.0));
 
   vec3 chromRing;
-  chromRing.r = (ringR0 * 1.45 + ringR1 * 1.05 + ringR2 * 0.70 + ringR3 * 0.40) * 1.25;
-  chromRing.g = (ringG0 * 1.35 + ringG1 * 0.95 + ringG2 * 0.65 + ringG3 * 0.35) * 1.05;
-  chromRing.b = (ringB0 * 1.25 + ringB1 * 0.90 + ringB2 * 0.60 + ringB3 * 0.32) * 1.35;
+  chromRing.r = (ringR0 * 1.70 + ringR1 * 1.25 + ringR2 * 0.85 + ringR3 * 0.50 + ringR4 * 0.25) * 1.35;
+  chromRing.g = (ringG0 * 1.55 + ringG1 * 1.15 + ringG2 * 0.78 + ringG3 * 0.45 + ringG4 * 0.22) * 1.10;
+  chromRing.b = (ringB0 * 1.45 + ringB1 * 1.10 + ringB2 * 0.75 + ringB3 * 0.42 + ringB4 * 0.20) * 1.45;
 
-  /* Tint dourado/branco quente no anel mais interno + lavanda nos externos */
-  vec3 innerTint = vec3(1.35, 1.18, 0.92);
-  vec3 outerTint = vec3(0.85, 0.75, 1.25);
-  chromRing = mix(chromRing * outerTint, chromRing * innerTint, clamp(ring0 * 1.8, 0.0, 1.0));
+  /* Tint: interno quente (branco-dourado) → externos lavanda/ciano */
+  vec3 innerTint = vec3(1.40, 1.22, 0.95);
+  vec3 outerTint = vec3(0.78, 0.88, 1.35);
+  float innerWeight = clamp(ring0 * 2.2 + ring1 * 0.6, 0.0, 1.0);
+  chromRing = mix(chromRing * outerTint, chromRing * innerTint, innerWeight);
 
-  /* Pulso + leve variação temporal */
-  float ringPulse = 0.82 + 0.18 * sin(t * 1.15) + uPulse * 0.25;
-  col += chromRing * ringPulse * pulse;
-  alpha = max(alpha, clamp(ringSum * 0.85, 0.0, 1.0));
+  /* Pulso + variação temporal */
+  float ringPulse = 0.85 + 0.20 * sin(t * 1.05) + uPulse * 0.30;
+  col += chromRing * ringPulse * pulse * 1.15;
+  alpha = max(alpha, clamp(ringSum * 0.92, 0.0, 1.0));
 
-  /* ---- Glitch / digital noise só na faixa dos anéis (estilo vídeo) ---- */
-  float glitchBand = smoothstep(Rs * 0.95, Rs * 1.05, rW) * (1.0 - smoothstep(Rs * 1.85, Rs * 2.6, rW));
+  /* ---- Glitch / digital noise na faixa dos anéis (estilo vídeo) ---- */
+  float glitchBand = smoothstep(Rs * 0.92, Rs * 1.08, rW) * (1.0 - smoothstep(Rs * 2.4, Rs * 3.4, rW));
   if (glitchBand > 0.01 && uReduced < 0.5) {
-    float gTime = floor(t * 11.0);
-    float n1 = hash21(vec2(floor(frag.x * 0.09), gTime));
-    float n2 = hash21(vec2(floor(frag.y * 0.13) + 23.0, gTime * 1.7));
-    float n3 = hash21(vec2(floor(rN * 42.0), floor(phi * 12.0) + gTime));
+    float gTime = floor(t * 12.0);
+    float n1 = hash21(vec2(floor(frag.x * 0.08), gTime));
+    float n2 = hash21(vec2(floor(frag.y * 0.12) + 23.0, gTime * 1.7));
+    float n3 = hash21(vec2(floor(rN * 38.0), floor(phi * 11.0) + gTime));
 
     /* Scanline / tear */
-    float scan = step(0.972, fract(frag.y * 0.17 + t * 3.4 + n1 * 5.0));
-    float tear = scan * glitchBand * (0.4 + 0.55 * n2);
+    float scan = step(0.965, fract(frag.y * 0.16 + t * 3.8 + n1 * 5.5));
+    float tear = scan * glitchBand * (0.45 + 0.55 * n2);
 
     /* RGB offset extra no glitch */
-    float extraAberr = (0.6 + 0.5 * n3) * glitchBand * Rs * 0.08;
+    float extraAberr = (0.7 + 0.5 * n3) * glitchBand * Rs * 0.10;
     vec3 gCol = chromRing;
-    gCol.r += extraAberr * 0.15;
-    gCol.b -= extraAberr * 0.12;
+    gCol.r += extraAberr * 0.22;
+    gCol.b -= extraAberr * 0.18;
 
-    float gMix = glitchBand * (0.28 + 0.40 * n3 + tear * 0.6);
-    col = mix(col, gCol * vec3(1.18, 0.98, 1.22) + vec3(tear * 0.35), gMix);
+    float gMix = glitchBand * (0.32 + 0.42 * n3 + tear * 0.65);
+    col = mix(col, gCol * vec3(1.22, 0.98, 1.28) + vec3(tear * 0.40), gMix);
 
     /* Flash raro */
-    float flash = step(0.985, n1) * step(0.68, n2) * glitchBand;
-    col += vec3(1.35, 1.28, 1.42) * flash * 0.55;
-    alpha = max(alpha, gMix * 0.4 + flash * 0.35);
+    float flash = step(0.982, n1) * step(0.65, n2) * glitchBand;
+    col += vec3(1.40, 1.32, 1.50) * flash * 0.65;
+    alpha = max(alpha, gMix * 0.45 + flash * 0.40);
   }
 
   /* Vignette suave */
