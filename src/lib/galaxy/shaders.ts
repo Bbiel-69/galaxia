@@ -122,44 +122,84 @@ vec3 starLayer(vec2 uv, float scale, float thresh, float time, float spikes) {
   return acc;
 }
 
-/* Disco de acreção estilo Gargantua - retorna cor premultiplicada + cobertura em .a */
-vec4 diskSample(float rd, float a, float Rs, float t) {
-  float rIn = Rs * 2.15;
-  float rOut = Rs * 11.0;
+/* ===== Buraco negro: núcleo + horizonte de eventos (referência: vídeo de anéis com falha digital) =====
+   Anéis finos e nítidos, quebrados em arcos, com separação cromática por canal e rasgos horizontais.
+   Nada de brilho suave: só linha, falha e vazio. */
 
-  /* rotação Kepleriana diferencial: interno gira mais rápido */
-  float om = 0.55 / pow(max(rd / Rs, 0.4), 1.5);
-  float aE = a + t * om;
+float wrapPi(float a) { return a - TAU * floor((a + PI) / TAU); }
 
-  /* streaks de plasma em espaço polar (3 oitavas de ruído animado) */
-  vec2 sp = vec2(rd * 0.9 / Rs, aE * 0.6366);
-  float s1 = texture(uNoise, vec2(sp.x * 0.11 - t * 0.0045, sp.y)).r;
-  float s2 = texture(uNoise, vec2(sp.x * 0.27 + t * 0.0032, sp.y * 2.7 + s1 * 0.4)).g;
-  float s3 = texture(uNoise, vec2(sp.x * 0.55 - t * 0.008,  sp.y * 5.3 + s2 * 0.6)).r;
-  float streak = s1 * 0.5 + s2 * 0.32 + s3 * 0.25;
-  streak = pow(clamp(streak, 0.0, 1.0), 1.7);
+/* intensidade de um canal do horizonte. p em unidades de Rs, ch: 0=R 1=G 2=B */
+float horizonChannel(vec2 p, float ch, float t, float aa, float spread) {
+  float sgn = ch - 1.0;
+  /* aberração: o canal vermelho desliza para um lado, o azul para o outro */
+  p -= vec2(sgn * 0.075 * spread, -sgn * 0.018 * spread);
+  float r = length(p);
+  float a = atan(p.y, p.x);
+  float acc = 0.0;
 
-  /* perfil radial: borda interna nítida, queda externa suave */
-  float prof = smoothstep(rIn * 0.8, rIn * 1.18, rd)
-             * (1.0 - smoothstep(rOut * 0.5, rOut, rd));
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float R0 = 1.04 + 1.5 * fi + 0.38 * fi * fi;
+    float dir = (i == 1 || i == 3) ? -1.0 : 1.0;
+    float rot = t * dir * 0.16 / (1.0 + fi * 0.6);
 
-  /* gradiente de temperatura: núcleo branco-quente -> dourado -> rosé/lavanda */
-  float temp = smoothstep(rOut, rIn * 1.1, rd);
-  vec3 c = mix(vec3(0.66, 0.42, 0.66), vec3(1.02, 0.72, 0.42), smoothstep(0.02, 0.45, temp));
-  c = mix(c, vec3(1.32, 1.24, 1.12), smoothstep(0.4, 0.95, temp));
+    /* excentricidade: anéis externos deslizam para fora do centro, como no vídeo */
+    float R = R0 + (0.05 + 0.11 * fi) * R0 * 0.5 * cos(a - 2.35 - fi * 0.7) * min(fi, 1.0)
+                 + 0.012 * R0 * sin(a * 5.0 + fi * 2.0 - t * 0.7);
+    R *= 1.0 + sgn * 0.010; /* aberração radial */
 
-  /* beaming Doppler: lado esquerdo se aproxima (mais brilhante e azulado) */
-  float dop = clamp(1.0 / pow(1.0 + 0.40 * cos(aE), 3.0), 0.22, 3.4);
-  float dopN = dop / 1.9;
-  c = mix(c, c * vec3(0.92, 0.98, 1.12), clamp(dopN - 0.7, 0.0, 1.0) * 0.5);
-  c = mix(c, c * vec3(1.08, 0.90, 0.80), clamp(0.55 - dopN, 0.0, 1.0) * 0.5);
+    float w = max(0.014 + 0.004 * fi, aa * 1.2);
+    w *= 0.65 + 0.7 * (0.5 + 0.5 * sin(a * 3.0 + fi * 1.9 + rot * 2.0));
 
-  /* aro interno incandescente */
-  float innerRim = exp(-pow((rd - rIn * 1.05) / (Rs * 0.3), 2.0)) * 1.5;
+    float d = abs(r - R);
+    float line = 1.0 - smoothstep(w, w + aa * 1.4, d);
+    /* lado interno do anel guarda um resíduo fraco, o externo não */
+    float inner = (r < R) ? exp(-d / (0.10 + 0.03 * fi)) * 0.22 : 0.0;
 
-  float lum = (streak * 1.15 + innerRim + 0.12) * prof * mix(0.5, 1.35, clamp(dopN, 0.0, 1.4));
-  float alpha = clamp(prof * (0.5 + streak * 0.65) * mix(0.6, 1.15, clamp(dopN, 0.0, 1.0)), 0.0, 1.0);
-  return vec4(c * lum, alpha);
+    float ph = fi * 2.17 + 0.6;
+    float v = 0.5 * sin(a * 2.0 + ph + rot * 2.0) + 0.5 * sin(a * 3.0 - ph * 1.7 - rot * 1.2);
+    float bias = (i == 0) ? 0.55 : 0.18;
+    float gap = (i == 0) ? pow(max(cos(a - 0.12 - rot), 0.0), 22.0) : 0.0;
+    float m = smoothstep(-0.05, 0.08, v + bias - gap * 1.7);
+
+    /* eco: o anel reaparece levemente deslocado onde o arco principal falha */
+    float Re = R * 1.052;
+    float echo = (1.0 - smoothstep(w * 0.8, w * 0.8 + aa * 1.4, abs(r - Re)))
+               * (1.0 - m) * smoothstep(0.1, 0.4, v + 0.5) * 0.7;
+
+    float lvl = 0.55 + 0.45 * sin(a * 2.0 + fi * 1.3 - rot * 3.0);
+    float fade = 1.0 - smoothstep(6.8, 9.5, r);
+    acc += ((line + inner) * m * (0.45 + 0.75 * lvl) + echo * 0.8) * fade;
+  }
+  return acc;
+}
+
+/* detritos digitais: traços e blocos curtos, aparecem e somem em passos de tempo */
+vec3 horizonDebris(vec2 p, float t, float rN) {
+  float gt = floor(t * 9.0);
+  vec3 outc = vec3(0.0);
+
+  vec2 c1 = vec2(p.x / 0.62, p.y / 0.045);
+  vec2 id1 = floor(c1);
+  float h1 = hash21(id1 + vec2(gt * 1.7, gt * 3.1));
+  float on1 = step(0.972, h1);
+  float lenF = hash21(id1 * 1.31 + 7.0);
+  float inX = step(fract(c1.x), 0.15 + lenF * 0.8) * step(0.12, fract(c1.x));
+  float inY = step(abs(fract(c1.y) - 0.5), 0.2);
+  float pick = hash21(id1 + 3.3);
+  vec3 tint = pick < 0.35 ? vec3(0.95, 0.9, 0.35) : (pick < 0.62 ? vec3(0.9, 0.95, 0.9) : (pick < 0.82 ? vec3(0.35, 0.55, 1.0) : vec3(1.0, 0.3, 0.25)));
+  outc += tint * on1 * inX * inY * (0.18 + 0.42 * lenF);
+
+  vec2 c2 = vec2(p.x / 0.07, p.y / 0.55);
+  vec2 id2 = floor(c2);
+  float h2 = hash21(id2 + vec2(gt * 2.3, gt * 0.9) + 40.0);
+  float on2 = step(0.985, h2);
+  float inX2 = step(abs(fract(c2.x) - 0.5), 0.22);
+  float inY2 = step(fract(c2.y), 0.25 + 0.6 * hash21(id2 + 9.0));
+  outc += vec3(0.55, 0.95, 0.7) * on2 * inX2 * inY2 * 0.3;
+
+  float env = smoothstep(1.15, 1.5, rN) * (1.0 - smoothstep(7.5, 10.5, rN));
+  return outc * env;
 }
 
 void main() {
@@ -170,16 +210,13 @@ void main() {
   float Rs = max(uHorizon / (uZoom * uRes.y), 1e-5);
   vec2 rel = world - uBh;
   float rW = length(rel);
+  float rN = rW / Rs;
   float t = uTime;
-  float pulse = 1.0 + 0.055 * sin(t * TAU / 8.3) + uPulse * 0.35;
+  float live = uReduced > 0.5 ? 0.0 : 1.0;
+  float px = 1.0 / (uZoom * uRes.y * Rs); /* tamanho de 1 pixel em unidades de Rs */
 
-  /* Transparent base so the video background shows through. */
   vec3 col = vec3(0.0);
   float alpha = 0.0;
-
-  /* Optional very subtle residual glow near the hole (no stars / nebulae / bodies). */
-  col += vec3(0.45, 0.28, 0.22) * exp(-max(rW - Rs, 0.0) * 1.6) * 0.04 * pulse;
-  alpha = max(alpha, exp(-max(rW - Rs * 2.5, 0.0) * 0.9) * 0.15);
 
   for (int i = 0; i < 12; i++) {
     if (i >= uN) break;
@@ -237,56 +274,52 @@ void main() {
     }
   }
 
-  float TILT = 0.295;
-  vec2 dp = vec2(rel.x, rel.y / TILT);
-  float rd = length(dp);
-  float aDisk = atan(dp.y, dp.x);
+  /* ---- Horizonte de eventos: sobrepõe o núcleo ---- */
+  vec2 p = rel / Rs;
 
-  vec4 disk = diskSample(rd, aDisk, Rs, t) * pulse;
+  /* rasgos horizontais: faixas de linhas deslocadas em x, em passos de ~10 fps */
+  float gt = floor(t * 10.0) * live;
+  float rowId = floor(frag.y / (uRes.y * 0.016));
+  float nRow = hash21(vec2(rowId, gt));
+  float tear = step(0.935, nRow) * live;
+  float shift = (hash21(vec2(rowId + 11.0, gt)) - 0.5) * 1.1 * tear;
+  float bigId = floor(frag.y / (uRes.y * 0.09));
+  float bigTear = step(0.975, hash21(vec2(bigId + 5.0, gt))) * live;
+  shift += (hash21(vec2(bigId, gt + 3.0)) - 0.5) * 2.2 * bigTear;
+  vec2 pg = vec2(p.x + shift, p.y);
+  float spread = 1.0 + 3.2 * (tear + bigTear);
 
-  float halo = exp(-pow(max(rW - Rs * 1.05, 0.0) / (Rs * 1.35), 2.0));
-  col += vec3(1.0, 0.72, 0.45) * halo * 0.22 * pulse;
-  alpha = max(alpha, halo * 0.35);
+  /* tremor discreto da própria geometria */
+  pg += live * (vec2(hash21(vec2(gt, 1.0)), hash21(vec2(gt, 2.0))) - 0.5) * 0.02;
 
-  col = col * (1.0 - disk.a) + disk.rgb;
-  alpha = max(alpha, disk.a);
+  float aa = px * 1.5;
+  vec3 ring = vec3(
+    horizonChannel(pg, 0.0, t, aa, spread),
+    horizonChannel(pg, 1.0, t, aa, spread),
+    horizonChannel(pg, 2.0, t, aa, spread)
+  );
+  /* cores do vídeo: o canal verde puxa para o amarelo-limão, o vermelho e o azul ficam nas bordas */
+  ring *= vec3(1.15, 0.92, 1.25) * (1.0 + uPulse * 0.6);
 
-  /* Pure black event horizon — hard core, no glow / gradient / particles inside. */
-  float shadow = 1.0 - smoothstep(Rs * 0.92, Rs * 1.02, rW);
-  col = mix(col, vec3(0.0), shadow);
-  alpha = max(alpha, shadow);
+  /* faixa horizontal rara, atravessa o horizonte inteiro */
+  float flashRow = step(0.9992, hash21(vec2(floor(frag.y * 0.5), gt + 77.0))) * live;
+  float inBand = 1.0 - smoothstep(4.5, 7.5, abs(p.x));
+  ring += vec3(0.55, 0.6, 0.5) * flashRow * inBand * 0.7 * step(1.05, rN);
 
-  float phi = atan(rel.y, rel.x);
-  float rN = rW / Rs;
-  float lensR = mix(Rs * 7.5, Rs * 2.3, clamp(rN, 0.0, 1.0));
-  vec4 lensed = diskSample(lensR, phi, Rs, t) * pulse;
-  float lensW = (1.0 - smoothstep(0.9, 1.0, rN))
-              * smoothstep(0.3, 0.75, rN)
-              * (0.45 + 0.55 * abs(sin(phi)));
-  col += lensed.rgb * lensW * 0.85;
-  alpha = max(alpha, lensed.a * lensW * 0.6);
+  ring += horizonDebris(pg, t, rN) * live;
+  if (uReduced > 0.5) ring += horizonDebris(pg, 1.0, rN) * 0.5;
 
-  float ring = exp(-pow((rW - Rs * 1.08) / (Rs * 0.045), 2.0));
-  col += vec3(1.25, 1.15, 0.98) * ring * (0.75 + 0.25 * sin(t * 0.9)) * pulse;
-  alpha = max(alpha, ring * 0.7);
+  float a = clamp(max(ring.r, max(ring.g, ring.b)), 0.0, 1.0);
 
-  vec2 q = uv * 2.0 - 1.0;
-  q.x *= uRes.x / uRes.y;
-  col *= 1.0 - dot(q, q) * 0.08;
+  /* núcleo: preto absoluto, opaco */
+  float core = 1.0 - smoothstep(1.0 - px * 1.5, 1.0, rN);
 
-  float lum = dot(col, vec3(0.299, 0.587, 0.114));
-  col = mix(vec3(lum), col, 1.07);
-  vec3 shadowTint = vec3(0.94, 0.99, 1.06);
-  vec3 highTint = vec3(1.06, 1.0, 0.93);
-  col *= mix(shadowTint, highTint, smoothstep(0.04, 0.95, lum));
+  col = col * (1.0 - a) + ring;
+  alpha = max(alpha, a);
+  col *= (1.0 - core * (1.0 - a)); /* o que estiver sob o núcleo some; o anel por cima permanece */
+  alpha = max(alpha, core);
 
-  col = pow(max(col, 0.0), vec3(0.88));
-
-  /* Outside the hole influence, stay transparent so the video is fully visible. */
-  float presence = smoothstep(Rs * 18.0, Rs * 4.0, rW);
-  alpha = clamp(max(alpha, presence * 0.02), 0.0, 1.0);
-
-  fragColor = vec4(col, alpha);
+  fragColor = vec4(col / max(alpha, 1e-4), alpha);
 }
 `;
 
