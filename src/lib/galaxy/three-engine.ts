@@ -349,7 +349,7 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
     {
       const c = clampCam(camX, camY, zoom);
       camX = c.x; camY = c.y; zoom = c.z;
-      if (!transition) { tx = camX; ty = camY; tz = zoom; }
+      if (!transition && !follow) { tx = camX; ty = camY; tz = zoom; }
     }
     const { w, h } = size();
     camera.left = -w / h / (2 * zoom) + camX; camera.right = w / h / (2 * zoom) + camX; camera.top = 1 / (2 * zoom) + camY; camera.bottom = -1 / (2 * zoom) + camY; camera.updateProjectionMatrix();

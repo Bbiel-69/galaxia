@@ -190,7 +190,7 @@ export function createFallbackEngine(
       camX = Math.max(-bound, Math.min(bound, camX));
       camY = Math.max(-bound, Math.min(bound, camY));
       zoom = Math.min(2.8, Math.max(0.12, zoom));
-      if (!transition) { tCamX = camX; tCamY = camY; tZoom = zoom; }
+      if (!transition && !follow) { tCamX = camX; tCamY = camY; tZoom = zoom; }
     }
     resize();
     const { width } = canvas;
