@@ -31,6 +31,8 @@ export function createFallbackEngine(
   let pointerId: number | null = null;
   let dragging = false;
   let moved = false;
+  const pointers = new Map<number, { x: number; y: number }>();
+  let pinchDistance = 0, pinchX = 0, pinchY = 0;
   let lastPx = 0;
   let lastPy = 0;
   let lastMoveTime = 0;
@@ -350,6 +352,23 @@ export function createFallbackEngine(
 
   function onPointerDown(e: PointerEvent) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    canvas.setPointerCapture(e.pointerId);
+    if (pointers.size > 1) {
+      pointerId = null;
+      dragging = false;
+      moved = true;
+      follow = false;
+      transition = null;
+      velocityX = 0;
+      velocityY = 0;
+      const pair = [...pointers.values()].slice(0, 2);
+      const rect = canvas.getBoundingClientRect();
+      pinchDistance = Math.hypot(pair[0]!.x - pair[1]!.x, pair[0]!.y - pair[1]!.y);
+      pinchX = (pair[0]!.x + pair[1]!.x) / 2 - rect.left;
+      pinchY = (pair[0]!.y + pair[1]!.y) / 2 - rect.top;
+      return;
+    }
     pointerId = e.pointerId;
     dragging = true;
     moved = false;
@@ -360,11 +379,35 @@ export function createFallbackEngine(
     lastPx = e.clientX;
     lastPy = e.clientY;
     lastMoveTime = e.timeStamp;
-    canvas.setPointerCapture(e.pointerId);
     canvas.style.cursor = "grabbing";
   }
 
   function onPointerMove(e: PointerEvent) {
+    if (pointers.has(e.pointerId)) {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size > 1) {
+        const pair = [...pointers.values()].slice(0, 2);
+        const rect = canvas.getBoundingClientRect();
+        const distance = Math.hypot(pair[0]!.x - pair[1]!.x, pair[0]!.y - pair[1]!.y);
+        const x = (pair[0]!.x + pair[1]!.x) / 2 - rect.left;
+        const y = (pair[0]!.y + pair[1]!.y) / 2 - rect.top;
+        if (pinchDistance > 0 && distance > 0) {
+          const anchor = screenToWorld(pinchX, pinchY);
+          const { w, h } = cssSize();
+          const nextZoom = Math.min(2.8, Math.max(0.12, zoom * distance / pinchDistance));
+          const bound = WORLD_BOUND * Math.max(0.55, Math.min(1.15, 0.85 / Math.max(nextZoom, 0.12)));
+          camX = tCamX = Math.max(-bound, Math.min(bound, anchor.x - (x - w / 2) / (h * nextZoom)));
+          camY = tCamY = Math.max(-bound, Math.min(bound, anchor.y + (y - h / 2) / (h * nextZoom)));
+          tZoom = nextZoom;
+          follow = true;
+        }
+        pinchDistance = distance;
+        pinchX = x;
+        pinchY = y;
+        moved = true;
+        return;
+      }
+    }
     const { h } = cssSize();
     if (dragging && e.pointerId === pointerId) {
       const dx = e.clientX - lastPx;
@@ -391,11 +434,28 @@ export function createFallbackEngine(
   }
 
   function onPointerUp(e: PointerEvent) {
-    if (e.pointerId !== pointerId) return;
+    const wasPrimary = e.pointerId === pointerId;
+    pointers.delete(e.pointerId);
+    if (pointers.size === 1) {
+      const [id, point] = [...pointers.entries()][0]!;
+      pointerId = id;
+      dragging = true;
+      moved = true;
+      follow = false;
+      lastPx = point.x;
+      lastPy = point.y;
+      lastMoveTime = e.timeStamp;
+      pinchDistance = 0;
+      velocityX = 0;
+      velocityY = 0;
+      return;
+    }
+    pinchDistance = 0;
+    if (pointers.size > 1 || (!wasPrimary && pointerId == null)) return;
     dragging = false;
     pointerId = null;
     canvas.style.cursor = hoverId ? "pointer" : "grab";
-    if (!moved) {
+    if (wasPrimary && !moved) {
       const rect = canvas.getBoundingClientRect();
       const wpos = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
       const hit = hitTest(wpos.x, wpos.y);
@@ -407,9 +467,22 @@ export function createFallbackEngine(
     }
   }
 
-  function onPointerCancel() {
-    dragging = false;
-    pointerId = null;
+  function onPointerCancel(e: PointerEvent) {
+    pointers.delete(e.pointerId);
+    pinchDistance = 0;
+    if (pointers.size === 1) {
+      const [id, point] = [...pointers.entries()][0]!;
+      pointerId = id;
+      dragging = true;
+      moved = true;
+      follow = false;
+      lastPx = point.x;
+      lastPy = point.y;
+      lastMoveTime = e.timeStamp;
+    } else if (pointers.size === 0) {
+      dragging = false;
+      pointerId = null;
+    }
     canvas.style.cursor = hoverId ? "pointer" : "grab";
   }
 
@@ -440,6 +513,15 @@ export function createFallbackEngine(
     hooks.onSelect("inicio");
     animateCamera("inicio", 0, 0, homeZoom());
   }
+  function zoomBy(factor: number) {
+    transition = null;
+    velocityX = 0;
+    velocityY = 0;
+    tCamX = camX;
+    tCamY = camY;
+    tZoom = Math.min(2.8, Math.max(0.12, zoom * factor));
+    follow = true;
+  }
 
   canvas.style.touchAction = "none";
   canvas.style.cursor = "grab";
@@ -465,6 +547,7 @@ export function createFallbackEngine(
       motionPreference.removeEventListener("change", onMotionChange);
     },
     recenter,
+    zoomBy,
     focus(id: string) {
       const b = BODIES.find((x) => x.id === id);
       if (!b) return;

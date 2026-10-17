@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ExternalLink, LocateFixed, Volume2, VolumeX, X } from "lucide-react";
+import { ExternalLink, LocateFixed, Minus, Plus, Volume2, VolumeX, X } from "lucide-react";
 import { createAmbience, type Ambience } from "@/lib/galaxy/audio";
 import { bodyById, type CelestialBody } from "@/lib/galaxy/bodies";
 import { createGalaxyEngine, type GalaxyEngine } from "@/lib/galaxy/three-engine";
@@ -49,6 +49,19 @@ export function GalaxyExperience() {
   const [webgl, setWebgl] = useState(true);
   const [reduced, setReduced] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
+  const [coarsePointer, setCoarsePointer] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(pointer: coarse)");
+    const update = () => setCoarsePointer(media.matches || window.innerWidth < 720);
+    update();
+    media.addEventListener("change", update);
+    window.addEventListener("resize", update);
+    return () => {
+      media.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   useEffect(() => {
     setReduced(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -173,6 +186,7 @@ export function GalaxyExperience() {
   const goHome = useCallback(() => { engineRef.current?.recenter(); setHint(false); audioRef.current?.setFocus("inicio"); }, []);
   const toggleTour = useCallback(() => { if (reduced) return; engineRef.current?.toggleTour(); }, [reduced]);
   const stopTour = useCallback(() => { engineRef.current?.stopTour(); setTourActive(false); setTourBody(null); }, []);
+  const zoomBy = useCallback((factor: number) => engineRef.current?.zoomBy(factor), []);
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-bg text-fg">
@@ -217,11 +231,16 @@ export function GalaxyExperience() {
         </div>
       </header>
 
+      {!selected ? <nav className="pointer-events-auto absolute right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-20 flex flex-col gap-2 sm:right-6 sm:bottom-6" aria-label="Controles de navegação">
+        <IconBtn label="Aproximar" onClick={() => zoomBy(1.18)}><Plus className="size-4" /></IconBtn>
+        <IconBtn label="Afastar" onClick={() => zoomBy(1 / 1.18)}><Minus className="size-4" /></IconBtn>
+      </nav> : null}
+
       {!ready ? <div className="absolute inset-0 z-40 grid place-items-center bg-bg/80 backdrop-blur-sm"><div className="w-[min(78vw,20rem)]"><div className="mb-3 flex justify-between font-sans text-xs tracking-[0.18em] text-muted uppercase"><span>Carregando horizonte</span><span>{progress}%</span></div><div className="h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-accent transition-[width] duration-300 ease-out" style={{ width: `${progress}%` }} /></div><p className="mt-2 text-center font-sans text-[10px] tracking-[0.16em] text-muted uppercase">{progress < 100 ? "Preparando" : "Pronto"}</p></div></div> : null}
 
       {ready && unavailable ? <div className="absolute inset-0 z-40 grid place-items-center bg-bg px-6 text-center"><div className="max-w-xs"><p className="font-sans text-[10px] tracking-[0.26em] text-muted uppercase">Observatório</p><h2 className="mt-1 font-display text-2xl leading-tight text-fg">Não foi possível carregar a galáxia</h2><p className="mt-3 font-sans text-sm leading-relaxed text-muted">O navegador bloqueou a renderização (comum em modo de economia de bateria). Tente recarregar a página ou desativar a economia de bateria.</p></div></div> : null}
 
-      {hint ? <p className="pointer-events-none absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-20 w-[min(92vw,28rem)] -translate-x-1/2 text-center font-sans text-xs tracking-[0.18em] text-muted uppercase">arraste para explorar · role para aproximar · clique no horizonte</p> : null}
+      {hint ? <p className="pointer-events-none absolute left-1/2 z-20 w-[min(68vw,28rem)] -translate-x-1/2 text-center font-sans text-xs tracking-[0.18em] text-muted uppercase sm:bottom-[max(1.25rem,env(safe-area-inset-bottom))]" style={coarsePointer ? { bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 6.5rem)" } : undefined}>{coarsePointer ? "arraste para explorar · pince para aproximar · toque em um astro" : "arraste para explorar · use a roda para aproximar · clique em um astro"}</p> : null}
 
       {selected && !tourActive ? <aside className="absolute right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 w-[min(calc(100vw-2rem),22.5rem)] animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-white/15 bg-surface/75 p-4 shadow-[0_18px_50px_rgb(0_0_0/0.45),0_0_44px_-16px_rgba(255,170,110,0.35)] backdrop-blur-xl duration-500 ease-out sm:right-6 sm:bottom-6" role="dialog" aria-labelledby="body-title">
         <div className="flex items-center justify-between gap-3">

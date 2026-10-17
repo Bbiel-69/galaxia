@@ -20,6 +20,7 @@ export type EngineHooks = {
 export type GalaxyEngine = {
   destroy: () => void;
   recenter: () => void;
+  zoomBy: (factor: number) => void;
   focus: (id: string) => void;
   closeFocus: () => void;
   setHover: (id: string | null) => void;
@@ -563,6 +564,10 @@ export function createGalaxyEngine(
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     },
     recenter,
+    zoomBy(factor: number) {
+      follow = true;
+      tZoom = zoom = Math.min(maxZoom, Math.max(minZoom, zoom * factor));
+    },
     closeFocus,
     setHover,
     focus(id: string) {

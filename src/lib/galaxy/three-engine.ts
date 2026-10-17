@@ -225,6 +225,8 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   let focusId: string | null = null;
   let follow = true, hover: string | null = null, selected: string | null = null;
   let running = true, dragging = false, moved = false, pointerId: number | null = null;
+  const pointers = new Map<number, { x: number; y: number }>();
+  let pinchDistance = 0, pinchX = 0, pinchY = 0;
   let lastX = 0, lastY = 0, lastMoveTime = 0, velocityX = 0, velocityY = 0;
   let last = performance.now(), raf = 0, pulse = 0, flare = 7;
   let tour = false, tourIndex = -1, tourElapsed = TOUR_MS;
@@ -358,12 +360,43 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
   };
   const down = (e: PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    canvas.setPointerCapture(e.pointerId);
+    if (pointers.size > 1) {
+      pointerId = null; dragging = false; moved = true; follow = false;
+      transition = null; velocityX = 0; velocityY = 0;
+      const pair = [...pointers.values()].slice(0, 2), r = canvas.getBoundingClientRect();
+      pinchDistance = Math.hypot(pair[0]!.x - pair[1]!.x, pair[0]!.y - pair[1]!.y);
+      pinchX = (pair[0]!.x + pair[1]!.x) / 2 - r.left;
+      pinchY = (pair[0]!.y + pair[1]!.y) / 2 - r.top;
+      return;
+    }
     stopTour(); pointerId = e.pointerId; dragging = true; moved = false; follow = false;
     transition = null; velocityX = 0; velocityY = 0;
     lastX = e.clientX; lastY = e.clientY; lastMoveTime = e.timeStamp;
-    canvas.setPointerCapture(e.pointerId);
   };
   const move = (e: PointerEvent) => {
+    if (pointers.has(e.pointerId)) {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size > 1) {
+        const pair = [...pointers.values()].slice(0, 2), r = canvas.getBoundingClientRect();
+        const distance = Math.hypot(pair[0]!.x - pair[1]!.x, pair[0]!.y - pair[1]!.y);
+        const x = (pair[0]!.x + pair[1]!.x) / 2 - r.left;
+        const y = (pair[0]!.y + pair[1]!.y) / 2 - r.top;
+        if (pinchDistance > 0 && distance > 0) {
+          const anchor = screenToWorld(pinchX, pinchY), { w, h } = size();
+          const nextZoom = Math.min(2.8, Math.max(0.12, zoom * distance / pinchDistance));
+          const next = clampCam(
+            anchor.x - (x - w / 2) / (h * nextZoom),
+            anchor.y + (y - h / 2) / (h * nextZoom),
+            nextZoom,
+          );
+          camX = tx = next.x; camY = ty = next.y; tz = next.z; follow = true;
+        }
+        pinchDistance = distance; pinchX = x; pinchY = y; moved = true;
+        return;
+      }
+    }
     const { h } = size();
     if (dragging && e.pointerId === pointerId) {
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
@@ -379,14 +412,34 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
     const r = canvas.getBoundingClientRect(), p = screenToWorld(e.clientX - r.left, e.clientY - r.top); setHover(hit(p.x, p.y)?.id ?? null);
   };
   const up = (e: PointerEvent) => {
-    if (e.pointerId !== pointerId) return; dragging = false; pointerId = null;
-    if (!moved) {
+    const wasPrimary = e.pointerId === pointerId;
+    pointers.delete(e.pointerId);
+    if (pointers.size === 1) {
+      const [id, point] = [...pointers.entries()][0]!;
+      pointerId = id; dragging = true; moved = true; follow = false;
+      lastX = point.x; lastY = point.y; lastMoveTime = e.timeStamp;
+      pinchDistance = 0; velocityX = 0; velocityY = 0;
+      return;
+    }
+    pinchDistance = 0;
+    if (pointers.size > 1 || (!wasPrimary && pointerId == null)) return;
+    dragging = false; pointerId = null;
+    if (wasPrimary && !moved) {
       velocityX = 0; velocityY = 0;
       const r = canvas.getBoundingClientRect(), p = screenToWorld(e.clientX - r.left, e.clientY - r.top), b = hit(p.x, p.y);
       if (b) chooseBody(b); else clearSelection();
     }
   };
-  const cancel = () => { dragging = false; pointerId = null; };
+  const cancel = (e: PointerEvent) => {
+    pointers.delete(e.pointerId); pinchDistance = 0;
+    if (pointers.size === 1) {
+      const [id, point] = [...pointers.entries()][0]!;
+      pointerId = id; dragging = true; moved = true; follow = false;
+      lastX = point.x; lastY = point.y; lastMoveTime = e.timeStamp;
+    } else if (pointers.size === 0) {
+      dragging = false; pointerId = null;
+    }
+  };
   const wheel = (e: WheelEvent) => {
     e.preventDefault(); stopTour(); transition = null; velocityX = 0; velocityY = 0;
     const r = canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
@@ -404,6 +457,11 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
     if (focusId == null && !returnView) returnView = { x: camX, y: camY, zoom };
     focusId = "inicio"; selected = "inicio"; hooks.onSelect("inicio");
     animateCamera("inicio", 0, 0, homeZoom());
+  };
+  const zoomBy = (factor: number) => {
+    stopTour(); transition = null; velocityX = 0; velocityY = 0;
+    const next = clampCam(camX, camY, zoom * factor);
+    tx = next.x; ty = next.y; tz = next.z; follow = true;
   };
   const toggleTour = () => { if (reduced) return; if (tour) stopTour(); else { tour = true; nextTour(); } };
 
@@ -436,6 +494,7 @@ export function createGalaxyEngine(canvas: HTMLCanvasElement, hooks: EngineHooks
       renderer.dispose();
     },
     recenter,
+    zoomBy,
     closeFocus: () => clearSelection(true),
     setHover,
     focus(id: string) {
