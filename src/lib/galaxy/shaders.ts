@@ -239,7 +239,7 @@ void main() {
     }
   }
 
-  /* ===== 3D Black Hole — pure black nucleus UNDER event horizon + light glitch ===== */
+  /* ===== 3D Black Hole — pure black nucleus FULLY UNDER multi-ring event horizon ===== */
   /* Disco elíptico (tilt) — sem warping de perspectiva (evita horizonte torto) */
   float TILT = 0.295;
   vec2 dp = vec2(rel.x, rel.y / TILT);
@@ -269,45 +269,93 @@ void main() {
   col += lensed.rgb * lensW * 0.88;
   alpha = max(alpha, lensed.a * lensW * 0.55);
 
-  /* ---- Horizonte de eventos: anel brilhante FORA do núcleo ---- */
-  /* Raio do anel ligeiramente maior que o núcleo para o núcleo ficar "por baixo" */
-  float ringR = Rs * 1.065;
-  float ring = exp(-pow((rW - ringR) / (Rs * 0.042), 2.0));
-  col += vec3(1.30, 1.16, 0.96) * ring * (0.78 + 0.22 * sin(t * 0.95)) * pulse;
-  alpha = max(alpha, ring * 0.75);
+  /* ============================================================ */
+  /*  HORIZONTE DE EVENTOS — multi-aneis concêntricos estilo vídeo */
+  /*  O núcleo preto fica TOTALMENTE sob / dentro do anel interno   */
+  /* ============================================================ */
 
-  /* ---- Núcleo puro preto (esfera sob o horizonte) ---- */
-  /* Core um pouco menor que o anel → o horizonte fica na frente / em volta */
-  float core = 1.0 - smoothstep(Rs * 0.94, Rs * 0.995, rW);
+  /* Núcleo 100% preto — raio um pouco menor que o anel interno */
+  float coreR = Rs * 0.92;
+  float core = 1.0 - smoothstep(coreR * 0.96, coreR, rW);
   col = mix(col, vec3(0.0), core);
   alpha = max(alpha, core);
 
-  /* ---- Glitch leve só na faixa do horizonte (fora do núcleo) ---- */
-  float glitchBand = smoothstep(Rs * 0.98, Rs * 1.06, rW) * (1.0 - smoothstep(Rs * 1.14, Rs * 1.50, rW));
+  /* ---- Multi-aneis concêntricos com aberração cromática (ref. vídeo) ---- */
+  /* Anel 0 (mais interno, bem colado ao núcleo) */
+  float ring0 = exp(-pow((rW - Rs * 1.00) / (Rs * 0.028), 2.0));
+  /* Anel 1 */
+  float ring1 = exp(-pow((rW - Rs * 1.18) / (Rs * 0.038), 2.0));
+  /* Anel 2 */
+  float ring2 = exp(-pow((rW - Rs * 1.42) / (Rs * 0.048), 2.0));
+  /* Anel 3 (mais externo, mais fraco) */
+  float ring3 = exp(-pow((rW - Rs * 1.72) / (Rs * 0.065), 2.0));
+  /* Anel 4 (muito fraco) */
+  float ring4 = exp(-pow((rW - Rs * 2.15) / (Rs * 0.09), 2.0));
+
+  float ringSum = ring0 * 1.35 + ring1 * 0.95 + ring2 * 0.65 + ring3 * 0.38 + ring4 * 0.18;
+
+  /* Aberração cromática forte nos anéis (RGB split radial) — como no vídeo */
+  float aberrAmt = Rs * 0.055 * (0.7 + 0.3 * sin(t * 1.7 + phi * 3.0));
+  float rR = rW + aberrAmt;
+  float rG = rW;
+  float rB = rW - aberrAmt * 1.15;
+
+  float ringR0 = exp(-pow((rR - Rs * 1.00) / (Rs * 0.028), 2.0));
+  float ringG0 = exp(-pow((rG - Rs * 1.00) / (Rs * 0.028), 2.0));
+  float ringB0 = exp(-pow((rB - Rs * 1.00) / (Rs * 0.028), 2.0));
+
+  float ringR1 = exp(-pow((rR - Rs * 1.18) / (Rs * 0.038), 2.0));
+  float ringG1 = exp(-pow((rG - Rs * 1.18) / (Rs * 0.038), 2.0));
+  float ringB1 = exp(-pow((rB - Rs * 1.18) / (Rs * 0.038), 2.0));
+
+  float ringR2 = exp(-pow((rR - Rs * 1.42) / (Rs * 0.048), 2.0));
+  float ringG2 = exp(-pow((rG - Rs * 1.42) / (Rs * 0.048), 2.0));
+  float ringB2 = exp(-pow((rB - Rs * 1.42) / (Rs * 0.048), 2.0));
+
+  float ringR3 = exp(-pow((rR - Rs * 1.72) / (Rs * 0.065), 2.0));
+  float ringG3 = exp(-pow((rG - Rs * 1.72) / (Rs * 0.065), 2.0));
+  float ringB3 = exp(-pow((rB - Rs * 1.72) / (Rs * 0.065), 2.0));
+
+  vec3 chromRing;
+  chromRing.r = (ringR0 * 1.45 + ringR1 * 1.05 + ringR2 * 0.70 + ringR3 * 0.40) * 1.25;
+  chromRing.g = (ringG0 * 1.35 + ringG1 * 0.95 + ringG2 * 0.65 + ringG3 * 0.35) * 1.05;
+  chromRing.b = (ringB0 * 1.25 + ringB1 * 0.90 + ringB2 * 0.60 + ringB3 * 0.32) * 1.35;
+
+  /* Tint dourado/branco quente no anel mais interno + lavanda nos externos */
+  vec3 innerTint = vec3(1.35, 1.18, 0.92);
+  vec3 outerTint = vec3(0.85, 0.75, 1.25);
+  chromRing = mix(chromRing * outerTint, chromRing * innerTint, clamp(ring0 * 1.8, 0.0, 1.0));
+
+  /* Pulso + leve variação temporal */
+  float ringPulse = 0.82 + 0.18 * sin(t * 1.15) + uPulse * 0.25;
+  col += chromRing * ringPulse * pulse;
+  alpha = max(alpha, clamp(ringSum * 0.85, 0.0, 1.0));
+
+  /* ---- Glitch / digital noise só na faixa dos anéis (estilo vídeo) ---- */
+  float glitchBand = smoothstep(Rs * 0.95, Rs * 1.05, rW) * (1.0 - smoothstep(Rs * 1.85, Rs * 2.6, rW));
   if (glitchBand > 0.01 && uReduced < 0.5) {
-    float gTime = floor(t * 9.0);
-    float n1 = hash21(vec2(floor(frag.x * 0.07), gTime));
-    float n2 = hash21(vec2(floor(frag.y * 0.11) + 19.0, gTime * 1.6));
-    float n3 = hash21(vec2(floor(rN * 36.0), floor(phi * 10.0) + gTime));
+    float gTime = floor(t * 11.0);
+    float n1 = hash21(vec2(floor(frag.x * 0.09), gTime));
+    float n2 = hash21(vec2(floor(frag.y * 0.13) + 23.0, gTime * 1.7));
+    float n3 = hash21(vec2(floor(rN * 42.0), floor(phi * 12.0) + gTime));
 
-    /* RGB split sutil no anel */
-    float aberr = (0.45 + 0.35 * n3) * glitchBand * Rs * 0.06;
-    vec3 gCol;
-    gCol.r = diskSample(rd + aberr * 0.6, aDisk, Rs, t).r;
-    gCol.g = diskSample(rd, aDisk, Rs, t).g;
-    gCol.b = diskSample(rd - aberr * 0.75, aDisk, Rs, t).b;
+    /* Scanline / tear */
+    float scan = step(0.972, fract(frag.y * 0.17 + t * 3.4 + n1 * 5.0));
+    float tear = scan * glitchBand * (0.4 + 0.55 * n2);
 
-    /* Scanline / tear discreto */
-    float scan = step(0.978, fract(frag.y * 0.14 + t * 2.8 + n1 * 4.0));
-    float tear = scan * glitchBand * (0.35 + 0.5 * n2);
+    /* RGB offset extra no glitch */
+    float extraAberr = (0.6 + 0.5 * n3) * glitchBand * Rs * 0.08;
+    vec3 gCol = chromRing;
+    gCol.r += extraAberr * 0.15;
+    gCol.b -= extraAberr * 0.12;
 
-    float gMix = glitchBand * (0.22 + 0.35 * n3 + tear * 0.55);
-    col = mix(col, gCol * vec3(1.12, 0.96, 1.18) + vec3(tear * 0.25), gMix);
+    float gMix = glitchBand * (0.28 + 0.40 * n3 + tear * 0.6);
+    col = mix(col, gCol * vec3(1.18, 0.98, 1.22) + vec3(tear * 0.35), gMix);
 
-    /* Flash raro no horizonte */
-    float flash = step(0.988, n1) * step(0.72, n2) * glitchBand;
-    col += vec3(1.25, 1.22, 1.35) * flash * 0.4;
-    alpha = max(alpha, gMix * 0.35 + flash * 0.3);
+    /* Flash raro */
+    float flash = step(0.985, n1) * step(0.68, n2) * glitchBand;
+    col += vec3(1.35, 1.28, 1.42) * flash * 0.55;
+    alpha = max(alpha, gMix * 0.4 + flash * 0.35);
   }
 
   /* Vignette suave */
@@ -324,7 +372,7 @@ void main() {
   float presence = smoothstep(Rs * 18.0, Rs * 4.0, rW);
   alpha = clamp(max(alpha, presence * 0.02), 0.0, 1.0);
 
-  /* Override final: núcleo 100% preto, sem brilho residual */
+  /* Override final: núcleo 100% preto, sem nenhum brilho residual */
   col = mix(col, vec3(0.0), core);
   alpha = max(alpha, core);
 
