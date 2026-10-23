@@ -301,6 +301,9 @@ void main() {
   /* cores do vídeo: o canal verde puxa para o amarelo-limão, o vermelho e o azul ficam nas bordas */
   ring *= vec3(1.15, 0.92, 1.25) * (1.0 + uPulse * 0.6);
 
+  ring += horizonDebris(pg, t, rN) * live;
+  if (uReduced > 0.5) ring += horizonDebris(pg, 1.0, rN) * 0.5;
+
   float a = clamp(max(ring.r, max(ring.g, ring.b)), 0.0, 1.0);
 
   /* núcleo: preto absoluto, opaco */
