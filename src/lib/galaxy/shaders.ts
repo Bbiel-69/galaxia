@@ -301,14 +301,6 @@ void main() {
   /* cores do vídeo: o canal verde puxa para o amarelo-limão, o vermelho e o azul ficam nas bordas */
   ring *= vec3(1.15, 0.92, 1.25) * (1.0 + uPulse * 0.6);
 
-  /* faixa horizontal rara, atravessa o horizonte inteiro */
-  float flashRow = step(0.9992, hash21(vec2(floor(frag.y * 0.5), gt + 77.0))) * live;
-  float inBand = 1.0 - smoothstep(4.5, 7.5, abs(p.x));
-  ring += vec3(0.55, 0.6, 0.5) * flashRow * inBand * 0.7 * step(1.05, rN);
-
-  ring += horizonDebris(pg, t, rN) * live;
-  if (uReduced > 0.5) ring += horizonDebris(pg, 1.0, rN) * 0.5;
-
   float a = clamp(max(ring.r, max(ring.g, ring.b)), 0.0, 1.0);
 
   /* núcleo: preto absoluto, opaco */
