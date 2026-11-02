@@ -1,1 +1,303 @@
-PLACEHOLDER1
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { ExternalLink, LocateFixed, Minus, Plus, Volume2, VolumeX, X } from "lucide-react";
+import { createAmbience, type Ambience } from "@/lib/galaxy/audio";
+import { bodyById, type CelestialBody } from "@/lib/galaxy/bodies";
+import { createGalaxyEngine, type GalaxyEngine } from "@/lib/galaxy/three-engine";
+import { createFallbackEngine } from "@/lib/galaxy/fallback";
+
+const MUTE_KEY = "horizonte-muted";
+
+function canUseWebgl2(): boolean {
+  const probeCanvas = document.createElement("canvas");
+  try {
+    const probeContext = probeCanvas.getContext("webgl2", {
+      alpha: false,
+      antialias: false,
+      premultipliedAlpha: false,
+      powerPreference: "high-performance",
+    });
+    if (!probeContext) return false;
+
+    // The probe must never become the app canvas. Release its context before
+    // dropping the temporary node so the real canvas remains untouched.
+    probeContext.getExtension("WEBGL_lose_context")?.loseContext();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    probeCanvas.width = 1;
+    probeCanvas.height = 1;
+    probeCanvas.remove();
+  }
+}
+
+export function GalaxyExperience() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const engineRef = useRef<GalaxyEngine | null>(null);
+  const audioRef = useRef<Ambience | null>(null);
+  const labelRefs = useRef(new Map<string, HTMLButtonElement>());
+  const cursorRef = useRef<HTMLDivElement>(null);
+  const trailRef = useRef<HTMLSpanElement[]>([]);
+  const [selected, setSelected] = useState<CelestialBody | null>(null);
+  const [tourBody, setTourBody] = useState<CelestialBody | null>(null);
+  const [tourActive, setTourActive] = useState(false);
+  const tourActiveRef = useRef(false);
+  const [hint, setHint] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [ready, setReady] = useState(false);
+  const [webgl, setWebgl] = useState(true);
+  const [reduced, setReduced] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+  const [coarsePointer, setCoarsePointer] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(pointer: coarse)");
+    const update = () => setCoarsePointer(media.matches || window.innerWidth < 720);
+    update();
+    media.addEventListener("change", update);
+    window.addEventListener("resize", update);
+    return () => {
+      media.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  useEffect(() => {
+    setReduced(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onMotion = () => setReduced(media.matches);
+    media.addEventListener("change", onMotion);
+
+    const cursor = cursorRef.current;
+    const positions = Array.from({ length: 6 }, () => ({ x: 0, y: 0 }));
+    let raf = 0, tx = 0, ty = 0;
+    const move = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse" || reduced) return;
+      tx = e.clientX; ty = e.clientY;
+      if (cursor) cursor.style.opacity = "1";
+    };
+    const tick = () => {
+      positions[0]!.x += (tx - positions[0]!.x) * 0.35;
+      positions[0]!.y += (ty - positions[0]!.y) * 0.35;
+      for (let i = 1; i < positions.length; i++) {
+        positions[i]!.x += (positions[i - 1]!.x - positions[i]!.x) * (0.2 - i * 0.018);
+        positions[i]!.y += (positions[i - 1]!.y - positions[i]!.y) * (0.2 - i * 0.018);
+      }
+      positions.forEach((p, i) => { const el = trailRef.current[i]; if (el) el.style.transform = `translate3d(${p.x}px,${p.y}px,0) translate(-50%,-50%) scale(${1 - i * 0.12})`; });
+      raf = requestAnimationFrame(tick);
+    };
+    window.addEventListener("pointermove", move, { passive: true });
+    raf = requestAnimationFrame(tick);
+    return () => { media.removeEventListener("change", onMotion); window.removeEventListener("pointermove", move); cancelAnimationFrame(raf); };
+  }, [reduced]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const stored = window.localStorage.getItem(MUTE_KEY);
+    const startMuted = stored === "1";
+    setMuted(startMuted);
+    const audio = createAmbience();
+    audioRef.current = audio;
+    audio.setMuted(startMuted);
+
+    const hooks = {
+      onHover: () => {},
+      onProgress: (done: number, total: number) => setProgress(total ? Math.round((done / total) * 100) : 0),
+      onTour: (id: string | null, active: boolean) => {
+        tourActiveRef.current = active;
+        setTourActive(active);
+        setTourBody(id ? bodyById(id) ?? null : null);
+        if (active) setSelected(null);
+      },
+      onSelect: (id: string | null) => {
+        const body = id ? bodyById(id) ?? null : null;
+        setSelected(null);
+        audio.setFocus(id);
+        if (body) { setHint(false); audio.ping(); }
+      },
+      onFocusComplete: (id: string | null) => {
+        if (tourActiveRef.current) return;
+        setSelected(id ? bodyById(id) ?? null : null);
+      },
+      onFrame: (next: { id: string; x: number; y: number; visible: boolean }[]) => {
+        for (const label of next) {
+          const el = labelRefs.current.get(label.id); if (!el) continue;
+          const body = bodyById(label.id); if (body?.kind === "black-hole") { el.style.opacity = "0"; continue; }
+          el.style.transform = `translate3d(${label.x}px,${label.y - 14}px,0) translate(-50%,-100%)`;
+          el.style.opacity = label.visible ? "1" : "0"; el.style.pointerEvents = label.visible ? "auto" : "none";
+        }
+      },
+    };
+
+    const unlock = () => audio.start();
+    window.addEventListener("pointerdown", unlock, { once: true });
+
+    let engine: GalaxyEngine | null = null;
+    if (!canUseWebgl2()) {
+      try {
+        engine = createFallbackEngine(canvas, hooks);
+        setWebgl(false);
+      } catch {
+        // Even 2D canvas is unavailable on this device/browser (e.g. GPU
+        // process crashed or the browser's live-canvas-context budget was
+        // exhausted). Fall through to the static, non-canvas experience
+        // below instead of letting this bubble up and crash the route.
+      }
+    } else {
+      try {
+        engine = createGalaxyEngine(canvas, hooks);
+        setWebgl(true);
+      } catch {
+        // WebGLRenderer may have claimed the real canvas before failing.
+        // Canvas context types are immutable, so never try 2D on this node.
+        try {
+          const fallbackCanvas = canvas.cloneNode(true) as HTMLCanvasElement;
+          canvas.replaceWith(fallbackCanvas);
+          canvasRef.current = fallbackCanvas;
+          engine = createFallbackEngine(fallbackCanvas, hooks);
+          setWebgl(false);
+        } catch {
+          // Same last-resort as above: no canvas rendering path worked.
+        }
+      }
+    }
+    engineRef.current = engine;
+    if (!engine) {
+      // No renderer could be created at all (e.g. the device blocked every
+      // canvas context, which happens on some Android phones in battery
+      // saver mode). Show a friendly message instead of leaving the page
+      // in a broken/crashed state.
+      setWebgl(false);
+      setUnavailable(true);
+      setReady(true);
+      setProgress(100);
+      return () => { window.removeEventListener("pointerdown", unlock); audio.dispose(); audioRef.current = null; };
+    }
+    setProgress(100); setReady(true);
+    return () => { window.removeEventListener("pointerdown", unlock); engine.destroy(); audio.dispose(); engineRef.current = null; audioRef.current = null; };
+  }, []);
+
+  // Garante o loop do vídeo de fundo: mobile (iOS/Android) frequentemente bloqueia
+  // autoplay mesmo mutado. Força play em vários eventos e mantém o loop vivo.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = true;
+    v.defaultMuted = true;
+    v.setAttribute("muted", "");
+    v.setAttribute("playsinline", "");
+    v.setAttribute("webkit-playsinline", "true");
+    const tryPlay = () => {
+      if (!v.paused) return;
+      const p = v.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    };
+    tryPlay();
+    const onVisible = () => { if (!document.hidden) tryPlay(); };
+    const onCanPlay = () => tryPlay();
+    const onPause = () => { if (!document.hidden) tryPlay(); };
+    v.addEventListener("canplay", onCanPlay);
+    v.addEventListener("loadeddata", tryPlay);
+    v.addEventListener("pause", onPause);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pointerdown", tryPlay, { passive: true });
+    window.addEventListener("touchstart", tryPlay, { passive: true });
+    window.addEventListener("touchend", tryPlay, { passive: true });
+    // Retry a few times during the first seconds (common on Android Chrome).
+    const timers = [200, 600, 1500, 3000].map((ms) => window.setTimeout(tryPlay, ms));
+    return () => {
+      timers.forEach((id) => clearTimeout(id));
+      v.removeEventListener("canplay", onCanPlay);
+      v.removeEventListener("loadeddata", tryPlay);
+      v.removeEventListener("pause", onPause);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pointerdown", tryPlay);
+      window.removeEventListener("touchstart", tryPlay);
+      window.removeEventListener("touchend", tryPlay);
+    };
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    setMuted((prev) => { const next = !prev; audioRef.current?.setMuted(next); window.localStorage.setItem(MUTE_KEY, next ? "1" : "0"); if (!next) audioRef.current?.start(); return next; });
+  }, []);
+  const closePanel = useCallback(() => { engineRef.current?.closeFocus(); setSelected(null); audioRef.current?.setFocus(null); }, []);
+  const goHome = useCallback(() => { engineRef.current?.recenter(); setHint(false); audioRef.current?.setFocus("inicio"); }, []);
+  const toggleTour = useCallback(() => { if (reduced) return; engineRef.current?.toggleTour(); }, [reduced]);
+  const stopTour = useCallback(() => { engineRef.current?.stopTour(); setTourActive(false); setTourBody(null); }, []);
+  const zoomBy = useCallback((factor: number) => engineRef.current?.zoomBy(factor), []);
+
+  return (
+    <div className="relative h-dvh w-full overflow-hidden bg-bg text-fg">
+      {/* Video background — continuous loop, no controls */}
+      <video
+        ref={videoRef}
+        className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
+        src="/video/milky-way.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        disablePictureInPicture
+        aria-hidden
+      />
+
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none bg-transparent" style={{ background: "transparent" }} aria-label="Galáxia interativa" />
+
+      {/* Visual boundary frame */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[15] rounded-[1.25rem] sm:rounded-[1.75rem]"
+        style={{
+          boxShadow: "inset 0 0 0 1px rgba(242,239,232,0.12), inset 0 0 80px rgba(0,0,0,0.45)",
+          margin: "max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right)) max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left))",
+        }}
+        aria-hidden
+      />
+
+      <div ref={cursorRef} className="pointer-events-none fixed inset-0 z-[80] opacity-0" aria-hidden>
+        {Array.from({ length: 6 }, (_, i) => (
+          <span key={i} ref={(el) => { if (el) trailRef.current[i] = el; }} className="fixed left-0 top-0 block rounded-full bg-accent shadow-[0_0_14px_rgba(255,210,150,0.8)]" style={{ width: Math.max(3, 9 - i), height: Math.max(3, 9 - i), opacity: 1 - i * 0.13 }} />
+        ))}
+        <span className="fixed left-0 top-0 font-sans text-[16px] text-accent" style={{ transform: "translate(-50%,-58%)" }}>✦</span>
+      </div>
+
+      <div className="pointer-events-none absolute inset-0 opacity-[0.05] mix-blend-overlay" style={{ backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.9'/></svg>)\"" }} aria-hidden />
+
+      <header className="pointer-events-none absolute top-0 left-0 z-20 flex w-full items-start justify-between gap-4 p-4 pt-[max(1rem,env(safe-area-inset-top))] sm:p-6">
+        <div className="max-w-[16rem]"><p className="font-sans text-[11px] font-medium tracking-[0.28em] text-muted uppercase">Observatório</p><h1 className="font-display text-[2.15rem] leading-[0.95] tracking-[-0.03em] text-fg sm:text-4xl">Horizonte</h1></div>
+        <div className="pointer-events-auto flex items-center gap-2">
+          <IconBtn label={muted ? "Ativar som" : "Silenciar"} onClick={toggleMute}>{muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}</IconBtn>
+          <IconBtn label="Voltar ao centro" onClick={goHome}><LocateFixed className="size-4" /></IconBtn>
+        </div>
+      </header>
+
+      {!selected ? <nav className="pointer-events-auto absolute right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-20 flex flex-col gap-2 sm:right-6 sm:bottom-6" aria-label="Controles de navegação">
+        <IconBtn label="Aproximar" onClick={() => zoomBy(1.18)}><Plus className="size-4" /></IconBtn>
+        <IconBtn label="Afastar" onClick={() => zoomBy(1 / 1.18)}><Minus className="size-4" /></IconBtn>
+      </nav> : null}
+
+      {!ready ? <div className="absolute inset-0 z-40 grid place-items-center bg-bg/80 backdrop-blur-sm"><div className="w-[min(78vw,20rem)]"><div className="mb-3 flex justify-between font-sans text-xs tracking-[0.18em] text-muted uppercase"><span>Carregando horizonte</span><span>{progress}%</span></div><div className="h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-accent transition-[width] duration-300 ease-out" style={{ width: `${progress}%` }} /></div><p className="mt-2 text-center font-sans text-[10px] tracking-[0.16em] text-muted uppercase">{progress < 100 ? "Preparando" : "Pronto"}</p></div></div> : null}
+
+      {ready && unavailable ? <div className="absolute inset-0 z-40 grid place-items-center bg-bg px-6 text-center"><div className="max-w-xs"><p className="font-sans text-[10px] tracking-[0.26em] text-muted uppercase">Observatório</p><h2 className="mt-1 font-display text-2xl leading-tight text-fg">Não foi possível carregar a galáxia</h2><p className="mt-3 font-sans text-sm leading-relaxed text-muted">O navegador bloqueou a renderização (comum em modo de economia de bateria). Tente recarregar a página ou desativar a economia de bateria.</p></div></div> : null}
+
+      {hint ? <p className="pointer-events-none absolute left-1/2 z-20 w-[min(68vw,28rem)] -translate-x-1/2 text-center font-sans text-xs tracking-[0.18em] text-muted uppercase sm:bottom-[max(1.25rem,env(safe-area-inset-bottom))]" style={coarsePointer ? { bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 6.5rem)" } : undefined}>{coarsePointer ? "arraste para explorar · pince para aproximar · toque em um astro" : "arraste para explorar · use a roda para aproximar · clique em um astro"}</p> : null}
+
+      {selected && !tourActive ? <aside className="absolute right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 w-[min(calc(100vw-2rem),22.5rem)] animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-white/15 bg-surface/75 p-4 shadow-[0_18px_50px_rgb(0_0_0/0.45),0_0_44px_-16px_rgba(255,170,110,0.35)] backdrop-blur-xl duration-500 ease-out sm:right-6 sm:bottom-6" role="dialog" aria-labelledby="body-title">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="body-title" className="font-display text-2xl leading-none">{selected.name}</h2>
+          <IconBtn label="Fechar" onClick={closePanel}><X className="size-4" /></IconBtn>
+        </div>
+        {selected.href ? <a href={selected.href} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-sans text-xs font-medium tracking-[0.14em] text-accent uppercase underline-offset-4 hover:underline">Visitar <ExternalLink className="size-3.5" /></a> : null}
+      </aside> : null}
+
+      <span className="sr-only" aria-live="polite">{ready ? (webgl ? "Galáxia pronta." : "Galáxia em modo simplificado.") : `Gerando galáxia: ${progress}%.`}</span>
+    </div>
+  );
+}
+
+function IconBtn({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+  return <button type="button" onClick={onClick} aria-label={label} className="inline-flex size-11 items-center justify-center rounded-md border border-border bg-surface/70 text-accent backdrop-blur-sm transition-[transform,background-color,box-shadow] duration-150 ease-out hover:bg-surface hover:shadow-[0_0_18px_-4px_rgba(255,180,120,0.45)] active:scale-[0.96]">{children}</button>;
+}
